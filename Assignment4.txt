@@ -1,0 +1,672 @@
+// ======================= FILE 1: FHLazySearchTree.h =================== //
+#ifndef FHLazySearchTree_H
+#define FHLazySearchTree_H
+#include <iostream>
+using namespace std;
+// ---------------------- FHLazySearchTreeNode Prototype ---------------
+template <class Comparable>
+class FHLazySearchTreeNode
+{
+public:
+   FHLazySearchTreeNode( const Comparable & d = Comparable(), 
+      FHLazySearchTreeNode *lt = NULL, 
+      FHLazySearchTreeNode *rt = NULL)
+      : lftChild(lt), rtChild(rt), data(d), deleted(false)
+   { }
+
+   FHLazySearchTreeNode *lftChild, *rtChild;
+   Comparable data;
+   bool deleted;
+
+   // for use only with AVL Trees
+   virtual int getHeight() const { return 0; }
+   virtual bool setHeight(int height) { return true; }
+}; 
+
+// ---------------------- FHLazySearchTree Prototype ----------------
+template <class Comparable>
+class FHLazySearchTree
+{
+protected:
+   int mSize;
+   FHLazySearchTreeNode<Comparable> *mRoot;
+   int mSizeHard;
+
+public:
+   FHLazySearchTree() { mSize = 0; mRoot = NULL; mSizeHard = 0; }
+   FHLazySearchTree(const FHLazySearchTree &rhs) 
+   {
+       mRoot = NULL; mSize = 0; *this = rhs; mSizeHard = 0;
+   }
+   ~FHLazySearchTree() { clear(); }
+
+   const Comparable &findMin() const;
+   const Comparable &findMax() const;
+   const Comparable &find(const Comparable &x) const;
+
+   bool empty() const { return (mSize == 0); }
+   int size() const { return mSize; }
+   int sizeHard() const { return mSizeHard;  }
+   void clear() { makeEmpty(mRoot); }
+   const FHLazySearchTree & operator=(const FHLazySearchTree &rhs);
+
+   bool insert(const Comparable &x);
+   bool remove(const Comparable &x);
+   bool contains(const Comparable &x) const { 
+       return find(mRoot, x) != NULL; }
+   void collectGarbage();
+
+   template <class Processor>
+   void traverse(Processor func) const { traverse(mRoot, func); }
+   int showHeight() const { return findHeight(mRoot); }
+
+protected:
+   FHLazySearchTreeNode<Comparable> *clone( 
+       FHLazySearchTreeNode<Comparable> *root) const;
+   FHLazySearchTreeNode<Comparable> *findMin(
+       FHLazySearchTreeNode<Comparable> *root) const;
+   FHLazySearchTreeNode<Comparable> *findMax(
+       FHLazySearchTreeNode<Comparable> *root) const;
+   FHLazySearchTreeNode<Comparable> *find(
+       FHLazySearchTreeNode<Comparable> *root,
+      const Comparable &x) const;
+   bool insert(FHLazySearchTreeNode<Comparable> * &root,
+      const Comparable &x);
+   bool remove(FHLazySearchTreeNode<Comparable> * &root, const Comparable &x);
+   void makeEmpty(FHLazySearchTreeNode<Comparable> * &subtreeToDelete);
+   template <class Processor>
+   void traverse(FHLazySearchTreeNode<Comparable> *treeNode, 
+      Processor func, int level = -1) const;
+   int findHeight(FHLazySearchTreeNode<Comparable> *treeNode, 
+       int height = -1) const;
+   void collectGarbage(FHLazySearchTreeNode<Comparable> *& root);
+   bool removeHard(FHLazySearchTreeNode<Comparable> *&root);
+
+public:
+   // for exception throwing
+   class EmptyTreeException {};
+   class NotFoundException {};
+};
+
+// FHLazySearchTree public method definitions -----------------------------
+template <class Comparable>
+const Comparable & FHLazySearchTree<Comparable>::findMin() const
+{
+   if (mRoot == NULL || mSize == 0)
+      throw EmptyTreeException();
+   return findMin(mRoot)->data;
+}
+
+template <class Comparable>
+const Comparable & FHLazySearchTree<Comparable>::findMax() const
+{
+   if (mRoot == NULL || mSize == 0)
+      throw EmptyTreeException();
+   return findMax(mRoot)->data;
+}
+
+template <class Comparable>
+const Comparable &FHLazySearchTree<Comparable>::find(
+   const Comparable &x) const
+{ 
+   FHLazySearchTreeNode<Comparable> *resultNode;
+   
+   resultNode = find(mRoot, x);
+   if (resultNode == NULL)
+      throw NotFoundException();
+    return resultNode->data;
+}
+
+template <class Comparable>
+const FHLazySearchTree<Comparable> &FHLazySearchTree<Comparable>::operator=
+   (const FHLazySearchTree &rhs)
+{
+   if (&rhs != this) 
+   {
+      clear();
+      mRoot = clone(rhs.mRoot);
+      mSize = rhs.size();
+      mSizeHard = rhs.sizeHard();
+   }
+   return *this;
+}
+
+template <class Comparable>
+bool FHLazySearchTree<Comparable>::insert(const Comparable &x)
+{
+   if (insert(mRoot, x))
+   {
+      mSize++;
+      return true;
+   }
+   return false;
+}
+
+template <class Comparable>
+bool FHLazySearchTree<Comparable>::remove(const Comparable &x)
+{
+   if (remove(mRoot, x))
+   {
+      mSize--;
+      return true;
+   }
+   return false;
+}
+
+template <class Comparable>
+void FHLazySearchTree<Comparable>::collectGarbage() {
+    if (mSizeHard > mSize) {
+        collectGarbage(mRoot);
+    }
+}
+
+template <class Comparable>
+template <class Processor>
+void FHLazySearchTree<Comparable>::traverse( 
+    FHLazySearchTreeNode<Comparable> *treeNode,
+    Processor func, int level) const
+{
+   if (treeNode == NULL)
+      return;
+   // we're not doing anything with level but its there in case we want it
+   traverse(treeNode->lftChild, func, level + 1);
+   if (!treeNode->deleted) {
+       func(treeNode->data);
+   }
+   traverse(treeNode->rtChild, func, level + 1);
+}
+
+
+// FHLazySearchTree private method definitions -----------------------------
+template <class Comparable>
+FHLazySearchTreeNode<Comparable> *FHLazySearchTree<Comparable>::clone(
+   FHLazySearchTreeNode<Comparable> *root) const
+{
+   FHLazySearchTreeNode<Comparable> *newNode;
+   if (root == NULL)
+      return NULL;
+
+   newNode =  new FHLazySearchTreeNode<Comparable>(
+      root->data, 
+      clone(root->lftChild), clone(root->rtChild));
+   newNode->deleted = root->deleted;
+   return newNode;
+}
+
+template <class Comparable>
+FHLazySearchTreeNode<Comparable> *FHLazySearchTree<Comparable>::findMin(
+   FHLazySearchTreeNode<Comparable> *root) const
+{
+   if (root == NULL)
+      return NULL;
+   if (findMin(root->lftChild) == NULL){
+       if (!root->deleted) {
+           return root;
+       }
+       else {
+          return findMin(root->rtChild);
+       }
+   }
+   return findMin(root->lftChild);
+}
+
+template <class Comparable>
+FHLazySearchTreeNode<Comparable> *FHLazySearchTree<Comparable>::findMax(
+   FHLazySearchTreeNode<Comparable> *root) const
+{
+   if (root == NULL)
+      return NULL;
+
+   if (findMax(root->rtChild) == NULL) {
+       if (root->deleted) {
+           return root->lftChild;
+       } 
+       return root;
+   }
+    
+   return findMax(root->rtChild);
+}
+
+template <class Comparable>
+FHLazySearchTreeNode<Comparable>* FHLazySearchTree<Comparable>::find(
+   FHLazySearchTreeNode<Comparable> *root, const Comparable &x) const
+{
+   if (root == NULL)
+      return NULL;
+
+   if (x < root->data)
+      return find(root->lftChild, x);
+   if (root->data < x)
+      return find(root->rtChild, x);
+   if (root->deleted) 
+      return NULL;
+   return root;
+}
+
+template <class Comparable>
+bool FHLazySearchTree<Comparable>::insert(
+   FHLazySearchTreeNode<Comparable> * &root, const Comparable &x)
+{
+   if (root == NULL)
+   {
+      root = new FHLazySearchTreeNode<Comparable>(x, NULL, NULL); 
+      mSizeHard++;
+      return true;
+   }
+   else if (x < root->data)
+      return insert(root->lftChild, x);
+   else if (root->data < x)
+      return insert(root->rtChild, x);
+   else if (root->deleted) {
+       root->deleted = false;
+       return true;
+   }
+   return false; // duplicate
+}
+
+template <class Comparable>
+bool FHLazySearchTree<Comparable>::remove(
+   FHLazySearchTreeNode<Comparable> * &root, const Comparable &x)
+{
+   if (root == NULL)
+      return false;
+
+   if (x < root->data)
+      return remove(root->lftChild, x);
+   if (root->data < x)
+      return remove(root->rtChild, x);
+
+   // found the node but already deleted
+   if (root->deleted) {
+       return false;
+   } 
+
+   root->deleted = true;
+   return true;
+}
+
+template <class Comparable>
+void FHLazySearchTree<Comparable>::makeEmpty(
+   FHLazySearchTreeNode<Comparable> * &subtreeToDelete)
+{
+   if (subtreeToDelete == NULL)
+      return;
+
+   // remove children
+   makeEmpty(subtreeToDelete->lftChild);
+   makeEmpty(subtreeToDelete->rtChild);
+
+   // clear client's pointer
+   if (subtreeToDelete->deleted) {
+       mSizeHard--;
+   }
+   else {
+       mSize--;
+       mSizeHard--;
+   }
+   delete subtreeToDelete;
+   subtreeToDelete = NULL;
+}
+
+template <class Comparable>
+int FHLazySearchTree<Comparable>::findHeight( F
+   HLazySearchTreeNode<Comparable> *treeNode,
+   int height ) const
+{
+   int leftHeight, rightHeight;
+
+   if (treeNode == NULL)
+      return height;
+   height++;
+   leftHeight = findHeight(treeNode->lftChild, height);
+   rightHeight = findHeight(treeNode->rtChild, height);
+   return (leftHeight > rightHeight)? leftHeight : rightHeight;
+}
+
+template <class Comparable>
+void FHLazySearchTree<Comparable>::collectGarbage(
+    FHLazySearchTreeNode<Comparable> *& root){
+    if (root == NULL) {
+        return;
+    }
+
+    // recurse through the tree left and right subtrees
+    collectGarbage(root->lftChild);
+    collectGarbage(root->rtChild);
+    if (root->deleted) {
+        removeHard(root);
+    }
+}
+
+template <class Comparable>
+bool FHLazySearchTree<Comparable>::removeHard(
+    FHLazySearchTreeNode<Comparable> *&treeNode) {
+    if (treeNode == NULL)
+        return false;
+
+    if (treeNode->lftChild != NULL && treeNode->rtChild != NULL)
+    {
+        // move data to the root
+        FHLazySearchTreeNode<Comparable> *minNode = findMin(treeNode->rtChild);
+        treeNode->data = minNode->data;
+        treeNode->deleted = false;
+        minNode->deleted = true;
+        removeHard(treeNode->rtChild);
+    }
+    else
+    {
+        // physically remove unused node
+        FHLazySearchTreeNode<Comparable> *nodeToRemove = treeNode;
+        treeNode = (treeNode->lftChild != NULL) ? 
+            treeNode->lftChild : treeNode->rtChild; 
+        delete nodeToRemove;
+        mSizeHard--;
+    }
+    return true;
+}
+#endif
+
+// ======================= FILE 2: Lab4.cpp =================== //
+#include <iostream>
+#include <string>
+#include <stack>
+#include "FHLazySearchTree.h"
+#include "EBookEntry.h"
+using namespace std;
+
+template <typename T>
+class PrintObject {
+public:
+    void operator()(const T& obj) {
+        cout << obj << " ";
+    }
+};
+
+// EXTRA CREDIT
+class PrintBook
+{
+public:
+    void operator()(EBookEntry book)
+    {
+        cout << book.getETextNum() << ": " << book.getCreator().substr(0, 15)
+            << ", " << book.getTitle().substr(0, 20)
+            << ", " << book.getSubject().substr(0, 25) << endl;
+    }
+};
+
+int main()
+{
+    FHLazySearchTree<int> searchTree;
+    PrintObject<int> intPrinter;
+
+    searchTree.traverse(intPrinter);
+    cout << "\ninitial size: " << searchTree.size() << endl;
+    searchTree.insert(50);
+    searchTree.insert(20);
+    searchTree.insert(30);
+    searchTree.insert(70);
+    searchTree.insert(10);
+    searchTree.insert(60);
+    cout << "After populating -- traversal and sizes: \n";
+    searchTree.traverse(intPrinter);
+    cout << "\ntree 1 size: " << searchTree.size()
+        << " Hard size: " << searchTree.sizeHard() << endl;
+    cout << "Collecting garbage on new tree - should be no garbage." << endl;
+    searchTree.collectGarbage();
+    cout << "tree 1 size: " << searchTree.size()
+        << " Hard size: " << searchTree.sizeHard() << endl;
+    // test assignment operator
+    FHLazySearchTree<int> searchTree2 = searchTree;
+    cout << "\n\nAttempting 1 removal: \n";
+    if (searchTree.remove(20))
+        cout << "removed " << 20 << endl;
+    //searchTree.insert(40);
+    searchTree.traverse(intPrinter);
+    cout << "tree 1 size: " << searchTree.size()
+        << " Hard size: " << searchTree.sizeHard() << endl;
+    cout << "Collecting Garbage - should clean 1 item. " << endl;
+    searchTree.collectGarbage();
+    cout << "tree 1 size: " << searchTree.size()
+        << " Hard size: " << searchTree.sizeHard() << endl;
+    cout << "Collecting Garbage again - no change expected. " << endl;
+    searchTree.collectGarbage();
+    cout << "tree 1 size: " << searchTree.size()
+        << " Hard size: " << searchTree.sizeHard() << endl;
+    // test soft insertion and deletion:
+    cout << "Adding 'hard' 22 - should see new sizes. " << endl;
+    searchTree.insert(22);
+    searchTree.traverse(intPrinter);
+    cout << "\ntree 1 size: " << searchTree.size()
+        << " Hard size: " << searchTree.sizeHard() << endl;
+    cout << "\nAfter soft removal. " << endl;
+    searchTree.remove(22);
+    searchTree.traverse(intPrinter);
+    cout << "\ntree 1 size: " << searchTree.size()
+        << " Hard size: " << searchTree.sizeHard() << endl;
+    cout << "Repeating soft removal. Should see no change. " << endl;
+    searchTree.remove(22);
+    searchTree.traverse(intPrinter);
+    cout << "\ntree 1 size: " << searchTree.size()
+        << " Hard size: " << searchTree.sizeHard() << endl;
+    cout << "Soft insertion. Hard size should not change. " << endl;
+    searchTree.insert(22);
+    searchTree.traverse(intPrinter);
+    cout << "\ntree 1 size: " << searchTree.size()
+        << " Hard size: " << searchTree.sizeHard() << endl;
+    cout << "\n\nAttempting 100 removals: \n";
+    for (int k = 100; k > 0; k--) {
+        if (searchTree.remove(k))
+            cout << "removed " << k << endl;
+    }
+    searchTree.collectGarbage();
+    cout << "\nsearchTree now:\n";
+    searchTree.traverse(intPrinter);
+    cout << "\ntree 1 size: " << searchTree.size()
+        << " Hard size: " << searchTree.sizeHard() << endl;
+    searchTree2.insert(500);
+    searchTree2.insert(200);
+    searchTree2.insert(300);
+    searchTree2.insert(700);
+    searchTree2.insert(100);
+    searchTree2.insert(600);
+    cout << "\nsearchTree2:\n";
+    searchTree2.traverse(intPrinter);
+    cout << "\ntree 2 size: " << searchTree2.size()
+        << " Hard size: " << searchTree2.sizeHard() << endl;
+
+    // test string BST tree
+    cout << "\n\n--------------TESTING STRING BST -----------------"
+        << endl;
+    FHLazySearchTree<string> tree;
+    PrintObject<string> stringPrinter;
+
+    // test inserts
+    tree.insert("a");
+    tree.insert("f");
+    tree.insert("e");
+    tree.insert("b");
+    tree.insert("m");
+    tree.insert("t");
+    tree.insert("c");
+    tree.insert("d");
+    tree.insert("k");
+    cout << "\n\ntraversing string tree: " << endl;
+    tree.traverse(stringPrinter);
+    cout << "\ntree is size: " << tree.size()
+        << " and hard size: " << tree.sizeHard() << endl;
+    cout << "The min of the tree is: " << tree.findMin()
+        << " while the max of the tree is: " << 
+        tree.findMax() << endl;
+    
+    // test removing 
+    cout << "removing node c, k, f" << endl;
+    tree.remove("c");
+    tree.remove("k");
+    tree.remove("f");
+    cout << "traversing new tree" << endl;
+    tree.traverse(stringPrinter);
+    cout << "\nThe new size is: " << tree.size() <<
+        " and the new hard size is: " << tree.sizeHard() << endl;
+    cout << "collecting garbage, should remove 3 nodes" << endl;
+    tree.collectGarbage();
+    cout << "The size is: " << tree.size() <<
+        " and the hard size is: " << tree.sizeHard() << endl;
+    cout << "the new min is " << tree.findMin()
+        << " and the new max is " << tree.findMax();
+
+    // remove all nodes and test empty tree
+    tree.remove("a");
+    tree.remove("e");
+    tree.remove("b");
+    tree.remove("m");
+    tree.remove("t");
+    tree.remove("d");
+    cout << "\ntraversing empty tree" << endl;
+    tree.traverse(stringPrinter);
+    try {
+        cout << "\nattempting to get min of empty tree: " << tree.findMin()
+            << endl;
+    }
+    catch (FHLazySearchTree<string>::EmptyTreeException ex) {
+        cout << " cannot find min of empty tree" << endl;
+    }
+
+    tree.collectGarbage();
+    cout << "After garbage collection, size of empty tree is: " << 
+        tree.size() << " \nand hard size of empty tree is: " << 
+        tree.sizeHard() << endl;
+
+    // EXTRA CREDIT
+    cout << "\n\n--------------EXTRA CREDIT -----------------" << endl;
+    EBookEntryReader bookInput("catalog-short4.txt");
+    PrintBook bookPrinter;
+    FHLazySearchTree<EBookEntry> eBookTree;
+    EBookEntry::setSortType(EBookEntry::SORT_BY_ID);
+    stack<int> bookInputEntries; // hold the indexes of bookInputs
+    int randNum;
+
+    // check if successfully imported
+    if (bookInput.readError())
+    {
+        cout << "couldn't open " << bookInput.getFileName() << " for input.\n";
+        exit(1);
+    }
+    
+    for (int i = 0; i < 10; i++) {
+        // insert 10 entries into the tree randomly
+        randNum = rand() % (bookInput.getNumBooks());
+        eBookTree.insert(bookInput[randNum]);
+        bookInputEntries.push(randNum);
+    }
+
+    cout << "eBookTree has size: " << eBookTree.size() << 
+        " and has hard size: " << eBookTree.sizeHard() << endl;
+    cout << "traversing EBooktree: " << endl;
+    eBookTree.traverse(bookPrinter);
+    cout << "\nthe min is: " << eBookTree.findMin().getTitle() <<
+        " with text num " << eBookTree.findMin().getETextNum() <<
+        "\nand the max is: " << eBookTree.findMax().getTitle() << 
+        " with text num " << eBookTree.findMax().getETextNum() << endl;
+    cout << "\nremoving all nodes" << endl;
+    
+    for (int i = 0; i < 10; i++) {
+        eBookTree.remove(bookInput[bookInputEntries.top()]);
+        bookInputEntries.pop();
+    }
+    cout << "After removal, eBookTree has size: " << eBookTree.size() <<
+        " and has hard size: " << eBookTree.sizeHard() << endl;
+    eBookTree.collectGarbage();
+    cout << "After garbage collection, eBookTree has size: " << eBookTree.size() 
+        << " and has hard size: " << eBookTree.sizeHard() << endl;
+    return 0;
+}
+
+// ======================= RUN OUTPUT =================== //
+
+initial size: 0
+After populating -- traversal and sizes:
+10 20 30 50 60 70
+tree 1 size: 6 Hard size: 6
+Collecting garbage on new tree - should be no garbage.
+tree 1 size: 6 Hard size: 6
+
+
+Attempting 1 removal:
+removed 20
+10 30 50 60 70 tree 1 size: 5 Hard size: 6
+Collecting Garbage - should clean 1 item.
+tree 1 size: 5 Hard size: 5
+Collecting Garbage again - no change expected.
+tree 1 size: 5 Hard size: 5
+Adding 'hard' 22 - should see new sizes.
+10 22 30 50 60 70
+tree 1 size: 6 Hard size: 6
+
+After soft removal.
+10 30 50 60 70
+tree 1 size: 5 Hard size: 6
+Repeating soft removal. Should see no change.
+10 30 50 60 70
+tree 1 size: 5 Hard size: 6
+Soft insertion. Hard size should not change.
+10 22 30 50 60 70
+tree 1 size: 6 Hard size: 6
+
+
+Attempting 100 removals:
+removed 70
+removed 60
+removed 50
+removed 30
+removed 22
+removed 10
+
+searchTree now:
+
+tree 1 size: 0 Hard size: 0
+
+searchTree2:
+10 20 30 50 60 70 100 200 300 500 600 700
+tree 2 size: 12 Hard size: 6
+
+
+--------------TESTING STRING BST -----------------
+
+
+traversing string tree:
+a b c d e f k m t
+tree is size: 9 and hard size: 9
+The min of the tree is: a while the max of the tree is: t
+removing node c, k, f
+traversing new tree
+a b d e m t
+The new size is: 6 and the new hard size is: 9
+collecting garbage, should remove 3 nodes
+The size is: 6 and the hard size is: 6
+the new min is a and the new max is t
+traversing empty tree
+ cannot find min of empty tree
+After garbage collection, size of empty tree is: 0
+and hard size of empty tree is: 0
+
+
+--------------EXTRA CREDIT -----------------
+eBookTree has size: 10 and has hard size: 10
+traversing EBooktree:
+4319: Clontz, J., The Gospels in Four , Bible. N.T. Gospels -- Ha
+11250: Sylvester, Char, Journeys Through Boo, Children's literature
+19833: Bruno, Giordano, The Heroic Enthusias, (no data found)
+25186: Altsheler, Jose, The Border WatchA St, Frontier and pioneer life
+26271: Newell, Peter, , The Slant Book, Children's poetry
+28135: Various, The Nursery, July 18, Children's literature, Am
+28351: (no data found), Dick and His Cat and, Animals -- Juvenile ficti
+28911: Okakura, Kakuzo, The Book of Tea, Tea
+28958: Merwin, Samuel,, The Road to Frontena, Canada -- History -- To 1
+29533: Birmingham, Geo, The Red Hand of Ulst, Ulster (Northern Ireland
+
+the min is: The Gospels in Four Part Harmony with text num 4319
+and the max is: The Red Hand of Ulster with text num 29533
+
+removing all nodes
+After removal, eBookTree has size: 0 and has hard size: 10
+After garbage collection, eBookTree has size: 0 and has hard size: 0

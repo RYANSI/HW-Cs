@@ -1,0 +1,292 @@
+// ==================== FILE 1 ===========================
+// SparseMatWMult.h
+#ifndef SparseMatWMult_h
+#define SparseMatWMult_h
+#include "SparseMat.h"
+template <class Object>
+class SparseMatWMult : public SparseMat<double> {
+    public:
+        // we need a default constructor for lists
+        // (used only be SpMt so no protection needed)
+        SparseMatWMult(int numRows, int numCols);
+        bool MatMult(SparseMatWMult<Object> & a, SparseMatWMult<Object> & b);
+};
+
+template <class Object>
+SparseMatWMult<Object>::SparseMatWMult(int numRows, int numCols) : 
+    SparseMat<double>(numRows, numCols, 0.0) { }
+
+template <class Object>
+bool SparseMatWMult<Object>::MatMult(SparseMatWMult<Object> & a, 
+    SparseMatWMult<Object> & b) {
+    if (a.getRowSize() < 1 || a.getColSize() < 1 || b.getColSize() < 1 || 
+        b.getRowSize() < 1 || a.getColSize() != b.getRowSize()) {
+        throw OutOfBoundsException();
+    }
+
+    // clear and resize the object before setting
+    this->clear();
+
+    // set the this object to be the result of the a * b matrix multiplication
+    for (int r = 0; r < a.getRowSize(); r++) {
+        if (a.rows[r].empty()) {
+            continue;
+        }
+        for (int c = 0; c < b.getColSize(); c++) {
+            for (int i = 0; i < b.getRowSize(); i++) {
+                if (a.get(r,i) == a.defaultVal || b.get(i, c) == b.defaultVal) {
+                    continue;
+                }
+                Object currValue = this->get(r, c);
+                this->set(r, c, currValue + (a.get(r,i) * b.get(i,c)));
+            }
+        }
+    }
+    return true;
+}
+
+// ==================== FILE 2 ===========================
+// Assignment3.cpp
+#include "SparseMatWMult.h"
+#include <iostream>
+#include <iomanip>
+#include <time.h>
+using namespace std;
+
+const int MAT_SIZE = 50;
+typedef float* DynMat[MAT_SIZE];
+typedef SparseMatWMult<double> SpMat; // extra credit
+
+// ---------------------- EXCEPTION CLASS --------------------------------
+class OutOfBoundsException { };
+
+void matMultDyn(const DynMat& matA, const DynMat& matB,
+    DynMat& matC, int size) {
+    if (size <= 0) {
+        throw OutOfBoundsException();
+    }
+
+    for (int r = 0; r < size; r++) {
+        for (int c = 0; c < size; c++) {
+            for (int i = 0; i < size; i++) {
+                matC[r][c] = matC[r][c] + (matA[r][i] * matB[i][c]);
+            }
+        }
+    }
+}
+
+void matShowDyn(const DynMat& mat, int start, int size) {
+    for (int r = start; r < start + size; r++) {
+        cout << endl;
+        for (int c = start; c < start + size; c++) {
+            cout << setw(10) << mat[r][c];
+        }
+    }
+    cout << endl << endl;
+}
+
+int main()
+{
+    clock_t startTime, stopTime;
+    double randFrac;
+    int randRow, randCol, smallPercent;
+    srand(time(NULL)); // for randomness
+    // non-sparse dynamic matrix
+    DynMat matDyn, matDynAns;
+
+    // allocate rows and initialize to 0
+    for (int r = 0; r < MAT_SIZE; r++) {
+        matDyn[r] = new float[MAT_SIZE];
+        matDynAns[r] = new float[MAT_SIZE];
+        for (int c = 0; c < MAT_SIZE; c++) {
+            matDyn[r][c] = 0;
+            matDynAns[r][c] = 0;
+        }
+    }
+
+    // generate small% non-default values bet .1 and 1
+    smallPercent = MAT_SIZE / 20. * MAT_SIZE; // div by 20. means 5%, of course
+    for (int r = 0; r < smallPercent; r++) {
+        randRow = rand() % (MAT_SIZE);
+        randCol = rand() % (MAT_SIZE);
+
+        matDyn[randRow][randCol] = 0.1 + static_cast <float> (rand()) / (static_cast <float> (RAND_MAX / (1 - 0.1)));
+    }
+
+     //10x10 submatrix in lower right
+    matShowDyn(matDyn, MAT_SIZE - 10, 10);
+    startTime = clock(); // ------------------ start
+    matMultDyn(matDyn, matDyn, matDynAns, MAT_SIZE);
+    stopTime = clock(); // ---------------------- stop}
+    matShowDyn(matDynAns, MAT_SIZE - 10, 10);
+    cout << "\nSize = " << MAT_SIZE << " Dyn Array Mult Elapsed Time: "
+        << (double)(stopTime - startTime) / (double)CLOCKS_PER_SEC
+        << " seconds." << endl << endl;
+
+    // clean up
+    for (int r = 0; r < MAT_SIZE; r++) {
+        delete[] matDyn[r];
+        delete[] matDynAns[r];
+        cout << endl;
+    }
+    
+        // Attempt at Extra Credit, was not able to get 800 MAT_SIZE to
+            run in < 5 secs.
+        SpMat aMat(5, 5);
+        SpMat bMat(5, 5);
+        SpMat resultMat(5, 5);
+    
+        // test this actually works
+        double temp1[5][5] = {
+            { 1.00, 2.00, 3.00, 4.00, 5.00 },
+            { -1.00, - 2.00, - 3.00, - 4.00, - 5.00 },
+            { 1.00, 3.00, 1.00, 3.00, 1.00 },
+            { 00.00, 01.00, 00.00, 01.00, 00.00 },
+            { -1.00, - 1.00, - 1.00, - 1.00, - 1.00 }
+        };
+    
+        double temp2[5][5]{
+            { 02.00, 01.00, 05.00, 00.00, 02.00 },
+            { 1.00, 4.00, 3.00, 2.00, 7.00},
+            { 4.00, 4.00, 4.00, 4.00, 4.00},
+            { 7.00, 1.00, -1.00, -1.00, -1.00},
+            { 0.00, 0.00, 8.00, -1.00, -6.00}
+        };
+    
+        for (int r = 0; r < 5; r++) {
+            for (int c = 0; c < 5; c++) {
+                aMat.set(r, c, temp1[r][c]);
+                bMat.set(r, c, temp2[r][c]);
+            }
+        }
+    
+        aMat.showSubSquare(0, 5);
+        bMat.showSubSquare(0, 5);
+        resultMat.showSubSquare(0, 5);
+        resultMat.MatMult(aMat, bMat);
+        resultMat.showSubSquare(0, 5);
+        
+        // test with random numbers generated the same as Part A
+        cout << "begin testing sparse matrix" << endl;
+        aMat.clear();
+        bMat.clear();
+        SpMat newMat(MAT_SIZE, MAT_SIZE);
+        SpMat otherMat(MAT_SIZE, MAT_SIZE);
+        SpMat rMat(MAT_SIZE, MAT_SIZE);
+    
+        aMat = newMat;
+        bMat = otherMat;
+        resultMat = rMat;
+        smallPercent = MAT_SIZE / 100 * MAT_SIZE;
+        for (int r = 0; r < smallPercent; r++) {
+            aMat.set(rand() % (MAT_SIZE), rand() % (MAT_SIZE), 0.1 + static_cast 
+                <float> (rand()) / (static_cast <float> (RAND_MAX / (1 - 0.1))));
+            bMat.set(rand() % (MAT_SIZE), rand() % (MAT_SIZE), 0.1 + static_cast 
+                <float> (rand()) / (static_cast <float> (RAND_MAX / (1 - 0.1))));
+        }
+        
+        aMat.showSubSquare(MAT_SIZE - 10, 10);
+        bMat.showSubSquare(MAT_SIZE - 10, 10);
+        startTime = clock();
+        resultMat.MatMult(aMat, bMat);
+        stopTime = clock();
+        resultMat.showSubSquare(MAT_SIZE - 10, 10);
+        cout << "\nSize = " << MAT_SIZE << " Sparse Matrix Mult Elapsed Time: "
+            << (double)(stopTime - startTime) / (double)CLOCKS_PER_SEC
+        << " seconds." << endl << endl;
+}
+//=================== COMMENTS ======================================
+/* My guess for the O() of the matrix multiplication function is M^3 
+    whereas the theta() is also M^3. My reasoning for why O(M^3)
+    is because there are 3 for loops, each looping over the matrix 
+    M times. Since M loops itself 3 times, the worst case run time
+    complexity is O(M^3). On the other hand, theta() is also M^3. 
+    Looking at the for loops, there are no way the for loops can exit 
+    the loops earlier. In fact, for any inputs of M, the for loops will 
+    have to go iterate through n times. Thus this also helps determine
+    our theta() is also M^3, an exponential run time complexity.
+
+   1. The smallest M that gave me a non-zero time is 57 with a time of 0.0001 
+        seconds to complete Matrix Multiplication.
+   2. M = 60
+    =====================================================
+    | Run Number | Value of M | Matrix Size|    Times   |
+    =====================================================
+    |     1      |      M     |     60     |    0.001s  |
+    =====================================================
+    |     2      |     2M     |    120     |    0.007s  |
+    =====================================================
+    |     3      |     3M     |    180     |    0.023s  |
+    =====================================================
+    |     4      |     4M     |    240     |    0.067s  |
+    =====================================================
+    |     5      |     8M     |    480     |    0.526s  |
+    =====================================================
+   3. The largest number M can be before it errors out or becomes 
+    unrealistic (unbearable) is at 1500 where it takes 42.698 seconds.
+   4. With a cubic O(), when I double the value of M, I expect to see 
+        the times to change by a factor of 8 since 2^3 = 8. Comparing between
+        the first and second run, 0.001s * 8 = 0.008s compared to the actual 
+        0.007s. Between the second and fourth run, 0.007s * 8 = 0.056s compared 
+        to the actual 0.067s. And finally, comparing the fourth and fifth runs, 
+        0.067s * 8 = 0.536s compared to the actual 0.526s. I think the data 
+        most definately agrees with my hypothesis that the matrix 
+        multiplication function has a run time complexity of O(M^3).
+*/
+
+// ==================== RUN OUTPUT 1 =====================
+// Run with an unbearable amount of wait time
+         0         0  0.388565         0         0         0         0         0         0         0
+         0         0  0.539659         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0         0         0
+   0.87813         0         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0         0         0
+   0.17655         0         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0         0         0
+
+
+ 0.0910339  0.150662  0.566571   1.15091  0.166959         0  0.962065  0.491986  0.376414  0.269191
+   1.02336   2.93707  0.911853   1.25156   1.59913  0.236077  0.798815  0.997771  0.983616   1.65922
+  0.379016   1.45312  0.949618   1.83389  0.371824   3.35459  0.494688  0.453745  0.870537  0.667076
+  0.229295   1.25258   1.25753  0.903268  0.163848    1.5705   0.25155   2.33066    1.1188  0.907373
+  0.794356  0.570386   0.32971   1.36825   1.60834   1.41866   1.31844  0.398622  0.924332  0.501896
+         0  0.846902  0.913624  0.724791  0.727111    1.5278   1.81724  0.552904   1.43361  0.937903
+  0.726242  0.256456  0.986263  0.758007   2.38066  0.391666    1.1191  0.655424   1.51378   1.82128
+   1.44464  0.471649   2.09517   2.16422  0.862773   1.90517    1.6113  0.124909   1.20042   2.73462
+   1.20515   1.89523   3.18204  0.917563  0.930428         0  0.545162   1.88436   1.32005   1.78663
+         0  0.183833  0.236445   1.22244  0.625688   1.21204   0.62316  0.590776  0.471449  0.648692
+
+
+Size = 1500 Dyn Array Mult Elapsed Time: 42.698 seconds.
+
+// ==================== RUN OUTPUT 2 =====================
+// Run output at the first M before processing time > 0
+         0         0  0.389361         0         0         0         0         0  0.207477         0
+         0         0         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0         0         0
+         0   0.20473         0         0         0         0         0         0  0.895544         0
+         0  0.858986         0         0         0         0         0         0         0         0
+         0         0         0         0         0  0.954268         0         0         0         0
+         0         0         0         0         0         0         0         0  0.997006  0.285757
+  0.488845         0         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0         0         0
+
+
+         0         0         0         0         0         0         0         0         0         0
+         0  0.421444         0         0         0         0         0         0         0         0
+  0.159887         0         0         0         0         0  0.780732         0         0         0
+         0  0.265255         0         0         0         0         0         0         0   0.15937
+  0.267477         0         0         0         0         0         0         0         0         0
+         0         0         0         0         0  0.910627         0         0         0         0
+         0         0         0         0         0         0         0         0         0  0.123801
+         0         0  0.190337         0         0  0.607408         0         0   0.48244         0
+         0    0.1526         0         0         0         0         0         0         0         0
+         0         0 0.0453086         0         0         0         0         0         0         0
+
+
+Size = 57 Dyn Array Mult Elapsed Time: 0.001 seconds.
+

@@ -1,0 +1,331 @@
+//// ------------------- FHSparseMat.h -----------------------------------
+#ifndef FHSPARSEMAT_H
+#define FHSPARSEMAT_H
+#include "FHlist.h"
+#include "FHvector.h"
+#include <iostream>
+#include <iomanip>
+using namespace std;
+
+// ---------------------- EXCEPTION CLASS --------------------------------
+class OutOfBoundsException { };
+// ---------------------- MATNODE CLASS   --------------------------------
+template <class Object>
+class MatNode {
+protected:
+    int col;
+public:
+    Object data;
+    // we need a default constructor for lists
+    MatNode(int cl = 0, Object dt = Object()) : col(cl), data(dt) {}
+    int getCol() const { return col; }
+    // not optimized yet for set() = defaultVal; refer to forums
+    const Object & operator=(const Object &x) { return (data = x); }
+};
+
+// ---------------------- FHSPARSEMAT Prototype --------------------------
+template <class Object>
+class SparseMat {
+    protected:
+        typedef FHlist< MatNode<Object> > MatRow;
+        typedef FHvector<MatRow> MasterCol; // the far left column
+
+        MasterCol rows;
+        Object defVal;
+        int rowSize, colSize;
+
+    public:
+        SparseMat(int r, int c, const Object & defaultVal);
+        const Object & get(int r, int c) const;
+        bool set(int r, int c, const Object &x);
+        void clear();
+        void showSubSquare(int start, int size);
+
+        // Extra Credit: overload the set()
+        Object & set(int r, int c);
+    };
+
+// FHSpareMat method definitions -------------------
+
+// constructor
+template <class Object>
+SparseMat<Object>::SparseMat(int r, int c, const Object & defaultVal) {
+    rowSize = r;
+    colSize = c;
+    defVal = defaultVal;
+    rows = MasterCol(r);
+}
+
+
+template <class Object>
+const Object & SparseMat<Object>::get(int r, int c) const {
+    if (r > rowSize || c > colSize) {
+        throw OutOfBoundsException();
+    }
+    else {
+        if (rows[r].empty()) {
+            return defVal;
+        }
+        typename MatRow::const_iterator iter;
+        for (iter = rows[r].begin(); iter != rows[r].end(); iter++) {
+            if ((*iter).getCol() == c) {
+                return (*iter).data;
+            }
+        }
+        return defVal;
+    }
+}
+
+template <class Object>
+bool SparseMat<Object>::set(int r, int c, const Object &x) {
+    if (r > rowSize || c > colSize) {
+        return false;
+    }
+    // is not the default value, update. 
+    if (rows[r].empty()) {
+        // node does not exist & only insert if it is not the default value 
+        if (x != defVal) {
+            rows[r].push_back(MatNode<Object>(c, x));
+        }
+    }
+    else {
+        // node exists
+        typename MatRow::iterator iter;
+        for (iter = rows[r].begin(); iter != rows[r].end(); iter++) {
+            if ((*iter).getCol() == c) {
+                if (x != defVal) {
+                    *iter = x;
+                }
+                else {
+                    // x is the default value, no point in storing it so 
+                    //  remove the node
+                   rows[r].erase(iter);
+                }
+                break;
+            }
+        }
+    }
+    return true;
+}
+
+template <class Object>
+void SparseMat<Object>::clear() {
+    typename MatRow::iterator listIter;
+    for (int k = 0; k < rows.size(); k++) {
+        //if (!rows[k].empty() || rows[k] != NULL) {
+        if (!rows[k].empty()) {
+            rows[k].clear();
+        }
+    }
+}
+
+template <class Object> 
+void SparseMat<Object>::showSubSquare(int start, int size) {
+    typename MatRow::iterator listIter;
+    bool inList = false;
+    cout << endl << endl;
+    for (int r = start; r <= start + size - 1; r++) {
+        cout << endl;
+        for (int c = start; c <= start + size - 1; c++) {
+            // loop through entire list and add another loop to check column
+            inList = false;
+            if (rows[r].empty()) {
+                cout << setw(5) << "0";
+            }
+            else {
+                for (listIter = rows[r].begin(); listIter != rows[r].end(); 
+                    listIter++) {
+                    if ((*listIter).getCol() == c) {
+                        cout << setw(5) << (*listIter).data;
+                        inList = true;
+                    }
+                }
+                if (!inList) {
+                    cout << setw(5) << "0";
+                }
+            }
+        }
+    }
+    cout << endl << endl; // fix formatting
+}
+
+// Extra Credit
+template <class Object>
+Object & SparseMat<Object>::set(int r, int c) {
+    if (r > rowSize || c > colSize) {
+        throw OutOfBoundsException();
+    }
+
+    if (rows[r].empty()) {
+        MatNode<Object> * newNode = &MatNode<Object>(c);
+        rows[r].push_back(*newNode);
+        return rows[r].back().data;
+    }
+    else {
+        // node exists
+        typename MatRow::iterator iter;
+        for (iter = rows[r].begin(); iter != rows[r].end(); iter++) {
+            if ((*iter).getCol() == c) {
+                return (*iter).data;
+            }
+        }
+        // row[r] contains a list but not for the col we want, create a new node
+        MatNode<Object> * newNode = &MatNode<Object>(c);
+        rows[r].push_back(*newNode);
+        return rows[r].back().data;
+    }
+}
+#endif
+
+//// ------------------- Assignment2.cpp ---------------------------------
+#include "stdafx.h"
+#include "FHlist.h"
+#include "FHvector.h"
+#include "FHsparseMat.h"
+#include <iostream>
+using namespace std;
+
+#define MAT_SIZE 100000
+typedef SparseMat<float> SpMat;
+ //--------------- main ---------------
+int main()
+{
+    SpMat mat(MAT_SIZE, MAT_SIZE, 0); // 100000 x 100000 filled with 0
+                                      // test mutators
+    mat.set(2, 5, 10);
+    mat.set(2, 5, 35); // should overwrite the 10
+    mat.set(3, 9, 21);
+    mat.set(MAT_SIZE, 1, 5); // should fail silently
+    mat.set(9, 9, mat.get(3, 9)); // should copy the 21 here
+    mat.set(4, 4, -9);
+    mat.set(4, 4, 0); // should remove the -9 node entirely
+    mat.set(MAT_SIZE - 1, MAT_SIZE - 1, 99);
+    // test accessors and exceptions
+    try {
+        cout << mat.get(7, 8) << endl;
+        cout << mat.get(2, 5) << endl;
+        cout << mat.get(9, 9) << endl;
+        cout << mat.get(-4, 7) << endl; // should throw an exception
+    }
+    catch (...) {
+        cout << "oops" << endl;
+    }
+    // show top left 15x15
+    mat.showSubSquare(0, 15);
+    // show bottom right 15x15
+    mat.showSubSquare(MAT_SIZE - 15, 15);
+
+    // test exceptions
+    bool isSuccess = mat.set(-1, MAT_SIZE + 1, 20);
+    if (isSuccess) {
+        cout << "Value set!" << endl;
+    }
+    else {
+        // should print "Value not set!"
+        cout << "Value not set!" << endl;
+    }
+    
+    // test clear() works and empties existing matrix
+    mat.clear();
+    mat.showSubSquare(0, 15);
+    mat.showSubSquare(MAT_SIZE - 15, 15);
+
+    // test extra credit
+    mat.set(2, 7) = 13;
+    cout << mat.get(2, 7) << endl;
+    mat.showSubSquare(2, 7);
+}
+
+//// ---------------------- RUN OUTPUT -----------------------------------
+0
+35
+21
+oops
+
+
+
+    0    0    0    0    0    0    0    0    0    0    0    0    0    0    0
+    0    0    0    0    0    0    0    0    0    0    0    0    0    0    0
+    0    0    0    0    0   35    0    0    0    0    0    0    0    0    0
+    0    0    0    0    0    0    0    0    0   21    0    0    0    0    0
+    0    0    0    0    0    0    0    0    0    0    0    0    0    0    0
+    0    0    0    0    0    0    0    0    0    0    0    0    0    0    0
+    0    0    0    0    0    0    0    0    0    0    0    0    0    0    0
+    0    0    0    0    0    0    0    0    0    0    0    0    0    0    0
+    0    0    0    0    0    0    0    0    0    0    0    0    0    0    0
+    0    0    0    0    0    0    0    0    0   21    0    0    0    0    0
+    0    0    0    0    0    0    0    0    0    0    0    0    0    0    0
+    0    0    0    0    0    0    0    0    0    0    0    0    0    0    0
+    0    0    0    0    0    0    0    0    0    0    0    0    0    0    0
+    0    0    0    0    0    0    0    0    0    0    0    0    0    0    0
+    0    0    0    0    0    0    0    0    0    0    0    0    0    0    0
+
+
+
+
+    0    0    0    0    0    0    0    0    0    0    0    0    0    0    0
+    0    0    0    0    0    0    0    0    0    0    0    0    0    0    0
+    0    0    0    0    0    0    0    0    0    0    0    0    0    0    0
+    0    0    0    0    0    0    0    0    0    0    0    0    0    0    0
+    0    0    0    0    0    0    0    0    0    0    0    0    0    0    0
+    0    0    0    0    0    0    0    0    0    0    0    0    0    0    0
+    0    0    0    0    0    0    0    0    0    0    0    0    0    0    0
+    0    0    0    0    0    0    0    0    0    0    0    0    0    0    0
+    0    0    0    0    0    0    0    0    0    0    0    0    0    0    0
+    0    0    0    0    0    0    0    0    0    0    0    0    0    0    0
+    0    0    0    0    0    0    0    0    0    0    0    0    0    0    0
+    0    0    0    0    0    0    0    0    0    0    0    0    0    0    0
+    0    0    0    0    0    0    0    0    0    0    0    0    0    0    0
+    0    0    0    0    0    0    0    0    0    0    0    0    0    0    0
+    0    0    0    0    0    0    0    0    0    0    0    0    0    0   99
+
+Value not set!
+
+
+
+    0    0    0    0    0    0    0    0    0    0    0    0    0    0    0
+    0    0    0    0    0    0    0    0    0    0    0    0    0    0    0
+    0    0    0    0    0    0    0    0    0    0    0    0    0    0    0
+    0    0    0    0    0    0    0    0    0    0    0    0    0    0    0
+    0    0    0    0    0    0    0    0    0    0    0    0    0    0    0
+    0    0    0    0    0    0    0    0    0    0    0    0    0    0    0
+    0    0    0    0    0    0    0    0    0    0    0    0    0    0    0
+    0    0    0    0    0    0    0    0    0    0    0    0    0    0    0
+    0    0    0    0    0    0    0    0    0    0    0    0    0    0    0
+    0    0    0    0    0    0    0    0    0    0    0    0    0    0    0
+    0    0    0    0    0    0    0    0    0    0    0    0    0    0    0
+    0    0    0    0    0    0    0    0    0    0    0    0    0    0    0
+    0    0    0    0    0    0    0    0    0    0    0    0    0    0    0
+    0    0    0    0    0    0    0    0    0    0    0    0    0    0    0
+    0    0    0    0    0    0    0    0    0    0    0    0    0    0    0
+
+
+
+
+    0    0    0    0    0    0    0    0    0    0    0    0    0    0    0
+    0    0    0    0    0    0    0    0    0    0    0    0    0    0    0
+    0    0    0    0    0    0    0    0    0    0    0    0    0    0    0
+    0    0    0    0    0    0    0    0    0    0    0    0    0    0    0
+    0    0    0    0    0    0    0    0    0    0    0    0    0    0    0
+    0    0    0    0    0    0    0    0    0    0    0    0    0    0    0
+    0    0    0    0    0    0    0    0    0    0    0    0    0    0    0
+    0    0    0    0    0    0    0    0    0    0    0    0    0    0    0
+    0    0    0    0    0    0    0    0    0    0    0    0    0    0    0
+    0    0    0    0    0    0    0    0    0    0    0    0    0    0    0
+    0    0    0    0    0    0    0    0    0    0    0    0    0    0    0
+    0    0    0    0    0    0    0    0    0    0    0    0    0    0    0
+    0    0    0    0    0    0    0    0    0    0    0    0    0    0    0
+    0    0    0    0    0    0    0    0    0    0    0    0    0    0    0
+    0    0    0    0    0    0    0    0    0    0    0    0    0    0    0
+
+13
+
+
+
+    0    0    0    0    0   13    0
+    0    0    0    0    0    0    0
+    0    0    0    0    0    0    0
+    0    0    0    0    0    0    0
+    0    0    0    0    0    0    0
+    0    0    0    0    0    0    0
+    0    0    0    0    0    0    0

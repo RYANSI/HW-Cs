@@ -1,0 +1,503 @@
+// ======= FILE 1: FHflowGraph.h =======================
+#ifndef FHFLOWGRAPH_H
+#define FHFLOWGRAPH_H
+#include <limits.h>
+#include <utility>
+#include <vector>
+#include <queue>
+#include <set>
+#include <map>
+#include <stack>
+#include <iostream>
+#include <functional>
+using namespace std;
+
+// CostType is some numeric type that expresses cost of edges
+// Object is the non-graph data for a vertex
+template <class Object, typename CostType>
+class FHFlowVertex
+{
+    // internal typedefs to simplify syntax
+    typedef FHFlowVertex<Object, CostType>* VertPtr;
+    typedef map<VertPtr, CostType> EdgePairList;
+
+public:
+    static int nSortKey;
+    static stack<int> keyStack;
+    static enum { SORT_BY_DATA, SORT_BY_DIST } eSortType;
+    static bool setNSortType(int whichType);
+    static void pushSortKey() { keyStack.push(nSortKey); }
+    static void popSortKey() { nSortKey = keyStack.top(); keyStack.pop(); }
+
+    static int const INFINITY_FH = INT_MAX;  // defined in limits.h
+    EdgePairList flowAdjList;
+    EdgePairList resAdjList;
+    Object data;
+    CostType dist;
+    VertPtr nextInPath;  // used for client-specific info
+
+    FHFlowVertex(const Object & x = Object());
+
+    void addToFlowAdjList(VertPtr neighbor, CostType cost);
+    void addToResAdjList(VertPtr neighbor, CostType cost);
+    void showFlowAdjList();
+    void showResAdjList();
+
+    bool operator<(const FHFlowVertex<Object, CostType> & rhs) const;
+    const FHFlowVertex<Object, CostType> & operator=
+        (const FHFlowVertex<Object, CostType> & rhs);
+};
+
+// static const initializations for Vertex --------------
+template <class Object, typename CostType>
+int FHFlowVertex<Object, CostType>::nSortKey
+= FHFlowVertex<Object, CostType>::SORT_BY_DATA;
+
+template <class Object, typename CostType>
+stack<int> FHFlowVertex<Object, CostType>::keyStack;
+// ------------------------------------------------------
+
+template <class Object, typename CostType>
+bool FHFlowVertex<Object, CostType>::setNSortType(int whichType)
+{
+    switch (whichType)
+    {
+    case SORT_BY_DATA:
+    case SORT_BY_DIST:
+        nSortKey = whichType;
+        return true;
+    default:
+        return false;
+    }
+}
+
+template <class Object, typename CostType>
+FHFlowVertex<Object, CostType>::FHFlowVertex(const Object & x)
+    : data(x), dist((CostType)INFINITY_FH),
+    nextInPath(NULL)
+{
+    // nothing to do
+}
+
+template <class Object, typename CostType>
+void FHFlowVertex<Object, CostType>::addToFlowAdjList(VertPtr neighbor, 
+    CostType cost) {
+    flowAdjList[neighbor] = cost;
+}
+
+template <class Object, typename CostType>
+void FHFlowVertex<Object, CostType>::addToResAdjList(VertPtr neighbor, 
+    CostType cost) {
+    resAdjList[neighbor] = cost;
+}
+
+template <class Object, typename CostType>
+void FHFlowVertex<Object, CostType>::showFlowAdjList() {
+    EdgePairList::iterator iter;
+
+    cout << "Adj Flow List for " << data << ": ";
+    for (iter = flowAdjList.begin(); iter != flowAdjList.end(); iter++) {
+        cout << iter->first->data << "(" << iter->second << ") ";
+    }
+    cout << endl;
+}
+
+template <class Object, typename CostType>
+void FHFlowVertex<Object, CostType>::showResAdjList() {
+    EdgePairList::iterator iter;
+
+    cout << "Adj Res List for " << data << ": ";
+    for (iter = resAdjList.begin(); iter != resAdjList.end(); iter++) {
+        cout << iter->first->data << "(" << iter->second << ") ";
+    }
+    cout << endl;
+}
+
+template <class Object, typename CostType>
+bool FHFlowVertex<Object, CostType>::operator<(
+    const FHFlowVertex<Object, CostType> & rhs) const
+{
+    switch (nSortKey)
+    {
+    case SORT_BY_DIST:
+        return (dist < rhs.dist);
+    case SORT_BY_DATA:
+        return (data < rhs.data);
+    default:
+        return false;
+    }
+}
+
+template <class Object, typename CostType>
+const FHFlowVertex<Object, CostType> & FHFlowVertex<Object, CostType>::operator=(
+    const FHFlowVertex<Object, CostType> & rhs)
+{
+    adjList = rhs.adjList;
+    data = rhs.data;
+    dist = rhs.dist;
+    nextInPath = rhs.nextInPath;;
+    return *this;
+}
+
+template <class Object, typename CostType>
+class FHFlowGraph
+{
+    // internal typedefs to simplify syntax
+    typedef FHFlowVertex<Object, CostType> Vertex;
+    typedef FHFlowVertex<Object, CostType>* VertPtr;
+    typedef map<VertPtr, CostType> EdgePairList;
+    typedef set<VertPtr> VertPtrSet;
+    typedef set<Vertex> VertexSet;
+
+private:
+    VertPtrSet vertPtrSet;
+    VertexSet vertexSet;
+    VertPtr startVertPtr;
+    VertPtr endVertPtr;
+
+public:
+    FHFlowGraph() {}
+    void addEdge(const Object &source, const Object &dest, CostType cost);
+    VertPtr addToVertexSet(const Object & object);
+    void clear();
+    void showFlowAdjTable();
+    void showResAdjTable();
+    bool setStartVert(const Object &x);
+    bool setEndVert(const Object &x);
+
+    // algorithms
+    CostType findMaxFlow();
+
+private:
+    VertPtr getVertexWithThisData(const Object & x);
+    bool establishNextFlowPath();
+    CostType getLimitingFlowOnResPath();
+    bool adjustPathByCost(CostType cost);
+    CostType getCostOfResEdge(VertPtr src, VertPtr dst);
+    bool addCostToResEdge(VertPtr src, VertPtr dst, CostType cost);
+    bool addCostToFlowEdge(VertPtr src, VertPtr dst, CostType cost);
+};
+
+template <class Object, typename CostType>
+FHFlowVertex<Object, CostType>* FHFlowGraph<Object, CostType>::addToVertexSet(
+    const Object & object)
+{
+    pair<typename VertexSet::iterator, bool> retVal;
+    VertPtr vPtr;
+
+    // save sort key for client
+    Vertex::pushSortKey();
+    Vertex::setNSortType(Vertex::SORT_BY_DATA);
+
+    // build and insert vertex into master list
+    retVal = vertexSet.insert(Vertex(object));
+
+    // get pointer to this vertex and put into vert pointer list
+    vPtr = (VertPtr)&*retVal.first;
+    vertPtrSet.insert(vPtr);
+
+    Vertex::popSortKey();  // restore client sort key
+    return vPtr;
+}
+
+template <class Object, typename CostType>
+void FHFlowGraph<Object, CostType>::clear()
+{
+    vertexSet.clear();
+    vertPtrSet.clear();
+}
+
+template <class Object, typename CostType>
+void FHFlowGraph<Object, CostType>::addEdge(
+    const Object &source, const Object &dest, CostType cost)
+{
+    VertPtr src, dst;
+
+    // put both source and dest into vertex list(s) if not already there
+    src = addToVertexSet(source);
+    dst = addToVertexSet(dest);
+
+    src->addToFlowAdjList(dst, 0);
+    src->addToResAdjList(dst, cost);
+    dst->addToResAdjList(src, 0);
+}
+
+template <class Object, typename CostType>
+FHFlowVertex<Object, CostType>* FHFlowGraph<Object, CostType>::getVertexWithThisData(
+    const Object & x)
+{
+    typename VertexSet::iterator findResult;
+    Vertex vert(x);
+
+    Vertex::pushSortKey();  // save client sort key
+    Vertex::setNSortType(Vertex::SORT_BY_DATA);
+    findResult = vertexSet.find(vert);
+    Vertex::popSortKey();  // restore client value
+
+    if (findResult == vertexSet.end())
+        return NULL;
+    return  (VertPtr)&*findResult;  
+}
+
+template<class Object, typename CostType>
+CostType FHFlowGraph<Object, CostType>::findMaxFlow() {
+    EdgePairList::iterator iter;
+    CostType totalCost = 0;
+
+    while (establishNextFlowPath()) {
+        adjustPathByCost(getLimitingFlowOnResPath());
+    }
+
+    if (startVertPtr != NULL) {
+        for (iter = startVertPtr->flowAdjList.begin(); 
+            iter != startVertPtr->flowAdjList.end(); iter++) {
+            totalCost += iter->second;
+        }
+    }
+
+    return totalCost;
+}
+
+template<class Object, typename CostType>
+bool FHFlowGraph<Object, CostType>::establishNextFlowPath() {
+    typename VertPtrSet::iterator vIter;
+    typename EdgePairList::iterator edgePrIter;
+    VertPtr wPtr, sPtr, vPtr;
+    CostType costVW;
+    queue<VertPtr> partiallyProcessedVerts;
+
+    sPtr = startVertPtr;
+    if (sPtr == NULL)
+        return false;
+
+    // initialize the vertex list and place the starting vert in p_p_v queue
+    for (vIter = vertPtrSet.begin(); vIter != vertPtrSet.end(); ++vIter)
+    {
+        (*vIter)->dist = Vertex::INFINITY_FH;
+        (*vIter)->nextInPath = NULL;
+    }
+
+    sPtr->dist = 0;
+    partiallyProcessedVerts.push(sPtr); // or, FHbinHeap::insert(), e.g.
+
+                                        // outer dijkstra loop
+    while (!partiallyProcessedVerts.empty())
+    {
+        vPtr = partiallyProcessedVerts.front();
+        partiallyProcessedVerts.pop();
+
+        for (edgePrIter = vPtr->resAdjList.begin();
+            edgePrIter != vPtr->resAdjList.end();
+            edgePrIter++)
+        {
+            wPtr = edgePrIter->first;
+            costVW = edgePrIter->second;
+            if (costVW != 0 && vPtr->dist + costVW < wPtr->dist)
+            {
+                wPtr->dist = vPtr->dist + costVW;
+                wPtr->nextInPath = vPtr;
+
+                // *wPtr now has improved distance, so add wPtr to p_p_v queue
+                partiallyProcessedVerts.push(wPtr);
+            }
+
+            if (vPtr == endVertPtr) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+template <class Object, typename CostType>
+CostType FHFlowGraph<Object, CostType>::getLimitingFlowOnResPath() {
+    VertPtr vp, start, stop;
+    stack<VertPtr> pathStack;
+
+    stop = startVertPtr;
+    start = endVertPtr;
+
+    if (start == NULL || stop == NULL)
+        return false;
+
+    CostType minValue = endVertPtr->INFINITY_FH;
+    for (vp = start; vp != stop; vp = vp->nextInPath)
+    {
+        if (vp->nextInPath == NULL)
+        {
+            return 0;
+        }
+
+        minValue = getCostOfResEdge(vp->nextInPath, vp) < minValue ?
+            getCostOfResEdge(vp->nextInPath, vp) : minValue;
+    }
+
+    return minValue;
+}
+
+template <class Object, typename CostType>
+bool FHFlowGraph<Object, CostType>::adjustPathByCost(CostType cost) {
+    VertPtr start = endVertPtr;
+    VertPtr end = startVertPtr;
+    VertPtr curr;
+
+    if (start == NULL || end == NULL) {
+        return false;
+    }
+
+    for (curr = start; curr != end; curr = curr->nextInPath) {
+        if (curr->nextInPath == NULL) {
+            return false;
+        }
+
+        if (!addCostToFlowEdge(curr->nextInPath, curr, cost)
+            || !addCostToResEdge(curr, curr->nextInPath, cost)
+            || !addCostToResEdge(curr->nextInPath, curr, -cost)) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+template <class Object, typename CostType>
+CostType FHFlowGraph<Object, CostType>::getCostOfResEdge(VertPtr src, 
+    VertPtr dst) {
+    VertPtr start = src;
+    EdgePairList::iterator iter;
+
+    if (src == NULL || dst == NULL) {
+        return 0;
+    }
+    
+    iter = src->resAdjList.find(dst);
+    if (iter == src->resAdjList.end()) {
+        return 0;
+    }
+
+    return iter->second;
+}
+
+template <class Object, typename CostType>
+bool FHFlowGraph<Object, CostType>::addCostToResEdge(VertPtr src, 
+    VertPtr dst, CostType cost) {
+    if (src == NULL || dst == NULL) {
+        return false;
+    }
+
+    EdgePairList::iterator iter = src->resAdjList.find(dst);
+    if (iter == src->resAdjList.end()) {
+        return false;
+    }
+    iter->second += cost;
+    return true;
+}
+
+template <class Object, typename CostType>
+bool FHFlowGraph<Object, CostType>::addCostToFlowEdge(VertPtr src, 
+    VertPtr dst, CostType cost) {
+    if (src == NULL || dst == NULL) {
+        return false;
+    }
+    EdgePairList::iterator iter = src->flowAdjList.find(dst);
+    if (iter == src->flowAdjList.end()) {
+        iter = dst->flowAdjList.find(src);
+        cost *= -1;
+    }
+    else {
+        iter->second += cost;
+    }
+    return true;
+}
+
+template <class Object, typename CostType>
+void FHFlowGraph<Object, CostType>::showFlowAdjTable() {
+    VertPtrSet::iterator iter;
+    
+    cout << "---------- Flow Adjacency Table ----------" << endl;
+    for (iter = vertPtrSet.begin(); iter != vertPtrSet.end(); iter++) {
+        (*iter)->showFlowAdjList();
+    }
+}
+
+template <class Object, typename CostType>
+void FHFlowGraph<Object, CostType>::showResAdjTable() {
+    VertPtrSet::iterator iter;
+
+    cout << "---------- Residual Adjacency Table ----------" << endl;
+    for (iter = vertPtrSet.begin(); iter != vertPtrSet.end(); iter++) {
+        (*iter)->showResAdjList();
+    }
+}
+
+template <class Object, typename CostType>
+bool FHFlowGraph<Object, CostType>::setStartVert(const Object &x) {
+    startVertPtr = getVertexWithThisData(x);
+    return startVertPtr != NULL;
+}
+template <class Object, typename CostType>
+bool FHFlowGraph<Object, CostType>::setEndVert(const Object &x) {
+    endVertPtr = getVertexWithThisData(x);
+    return endVertPtr != NULL;
+}
+#endif
+
+// ======= FILE 2: Assignment9.cpp =======================
+#include <iostream>
+#include <string>
+#include "FHflowGraph.h"
+using namespace std;
+
+// --------------- main ---------------
+int main()
+{
+    int finalFlow;
+    // build graph
+    FHFlowGraph<string, int> myG;
+    myG.addEdge("s", "a", 3); myG.addEdge("s", "b", 2);
+    myG.addEdge("a", "b", 1); myG.addEdge("a", "c", 3); myG.addEdge("a", "d", 4);
+    myG.addEdge("b", "d", 2);
+    myG.addEdge("c", "t", 2);
+    myG.addEdge("d", "t", 3);
+    // show the original flow graph
+    myG.showResAdjTable();
+    myG.showFlowAdjTable();
+    myG.setStartVert("s");
+    myG.setEndVert("t");
+    finalFlow = myG.findMaxFlow();
+    cout << "Final flow: " << finalFlow << endl;
+    myG.showResAdjTable();
+    myG.showFlowAdjTable();
+    return 0;
+}
+
+// ======================== RUN OUTPUT =========================
+---------- Residual Adjacency Table ----------
+Adj Res List for s: a(3) b(2)
+Adj Res List for a: s(0) b(1) c(3) d(4)
+Adj Res List for b: s(0) a(0) d(2)
+Adj Res List for c: a(0) t(2)
+Adj Res List for d: a(0) b(0) t(3)
+Adj Res List for t: c(0) d(0)
+---------- Flow Adjacency Table ----------
+Adj Flow List for s: a(0) b(0)
+Adj Flow List for a: b(0) c(0) d(0)
+Adj Flow List for b: d(0)
+Adj Flow List for c: t(0)
+Adj Flow List for d: t(0)
+Adj Flow List for t:
+Final flow: 5
+---------- Residual Adjacency Table ----------
+Adj Res List for s: a(0) b(0)
+Adj Res List for a: s(3) b(1) c(1) d(3)
+Adj Res List for b: s(2) a(0) d(0)
+Adj Res List for c: a(2) t(0)
+Adj Res List for d: a(1) b(2) t(0)
+Adj Res List for t: c(2) d(3)
+---------- Flow Adjacency Table ----------
+Adj Flow List for s: a(3) b(2)
+Adj Flow List for a: b(0) c(2) d(1)
+Adj Flow List for b: d(2)
+Adj Flow List for c: t(2)
+Adj Flow List for d: t(3)
+Adj Flow List for t:

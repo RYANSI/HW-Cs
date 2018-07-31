@@ -1,0 +1,407 @@
+// ============== FHhashQPwFind.h =======================
+#ifndef FHHASHQPWFIND_H
+#define FHHASHQPWFIND_H
+#pragma once
+#include "FHhashQP.h"
+
+using namespace std;
+template <class Object, typename KeyType>
+class FHhashQPwFind : public FHhashQP<Object> {
+public:
+    const Object find(const KeyType & key);
+    class NotFoundException {};
+
+protected:
+    int myHashKey(const KeyType & key) const;
+    int findPosKey(const KeyType & key) const;
+};
+
+template <class Object, typename KeyType>
+const Object FHhashQPwFind<Object, KeyType>::find(const KeyType & key) {
+    int index = findPosKey(key);
+    typename FHhashQP<Object>::HashEntry searchResult = this->mArray[index];
+    if (searchResult.state == FHhashQP<Object>::ACTIVE) {
+        return searchResult.data;
+    }
+    throw NotFoundException();
+}
+
+template <class Object, typename KeyType>
+int FHhashQPwFind<Object, KeyType>::myHashKey(const KeyType & key) const {
+    int hashVal = Hash(key) % this->mTableSize;
+    if (hashVal < 0)
+        hashVal += this->mTableSize;
+
+    return hashVal;
+
+}
+
+template <class Object, typename KeyType>
+int FHhashQPwFind<Object, KeyType>::findPosKey(const KeyType & key) const {
+    int kthOddNum = 1;
+    int index = myHashKey(key);
+
+    while (this->mArray[index].state != FHhashQP<Object>::EMPTY
+        && getKey(this->mArray[index].data) != key)
+    {
+        index += kthOddNum;  // k squared = (k-1) squared + kth odd #
+        kthOddNum += 2;   // compute next odd #
+        if (index >= this->mTableSize)
+            index -= this->mTableSize;
+    }
+
+    return index;
+}
+
+#endif
+
+// ============== Assignment6.cpp ===================================
+#include "FHhashQPwFind.h"
+#include "EBookEntry.h"
+#include <string>
+#include <iostream>
+
+using namespace std;
+
+class PrintBook
+{
+public:
+    void operator()(EBookEntry book)
+    {
+        cout << book.getETextNum() << ": " << book.getCreator().substr(0, 15)
+            << ", " << book.getTitle().substr(0, 20)
+            << ", " << book.getSubject().substr(0, 25) << endl;
+    }
+};
+
+// int getKey(const EBookEntry & item);
+string getKey(const EBookEntry & item); 
+int Hash(const EBookEntry & item);
+int Hash(const string & key);
+int Hash(const int & key);
+
+int main()
+{
+    const int NUM_RANDOM_INDICES = 25;
+    int randomIndicies[NUM_RANDOM_INDICES];
+    int index;
+    PrintBook bookPrinter;
+    srand(time(NULL));
+    EBookEntry book;
+
+    // set up the EBook thing
+    EBookEntryReader bookInput("catalog-short4.txt");
+    if (bookInput.readError()) {
+        cout << "couldn't open " << bookInput.getFileName() << " for input.\n";
+        exit(1);
+    }
+
+    // FHhashQPwFind<EBookEntry, int> hashTable;
+    FHhashQPwFind<EBookEntry, string> hashTable;
+
+    // EBookEntry::setSortType(EBookEntry::SORT_BY_ID);
+    EBookEntry::setSortType(EBookEntry::SORT_BY_CREATOR);
+
+    cout << bookInput.getFileName() << endl;
+    cout << bookInput.getNumBooks() << endl;
+
+    // create & hashtable of Ebooks
+    for (int i = 0; i < bookInput.getNumBooks(); i++) {
+        hashTable.insert(bookInput[i]);
+    }
+
+
+    // generate some random indicies into the array
+    // display the random books from the array
+    for (int i = 0; i < NUM_RANDOM_INDICES; i++) {
+        index = rand() % bookInput.getNumBooks();
+        randomIndicies[i] = index;
+        bookPrinter(bookInput[index]);
+    }
+
+    // find the same objects:
+    cout << "The same random books from the hash table " << endl;
+    for (int k = 0; k < NUM_RANDOM_INDICES; k++) {
+        try {
+            bookPrinter(bookInput[randomIndicies[k]]);
+            // book = hashTable.find(bookInput[randomIndicies[k]].getETextNum());
+            book = hashTable.find(bookInput[randomIndicies[k]].getCreator());
+            bookPrinter(book);
+        }
+        catch (...) {
+            cout << "Not found.";
+        }
+        cout << endl;
+    }
+
+    // test known failures exceptions:
+    // FAILURE 1
+    try {
+        // book = hashTable.find(-3);
+        book = hashTable.find( "Jack Kerouac" );
+    }
+    catch (...) {
+        cout << "Not found." << endl;
+    }
+
+    // FAILURE 2 
+    try {
+        // book = hashTable.find(0);
+        book = hashTable.find("another invalid author");
+    }
+    catch (...) {
+        cout << "Did not find book" << endl;
+    }
+
+    // FAILURE 3
+    try {
+        // book = hashTable.find(-4);
+        book = hashTable.find("some key");
+    }
+    catch (...) {
+        cout << "did not find book again" << endl;
+    }
+
+    return 0;
+}
+
+string getKey(const EBookEntry & item) {
+    return item.getCreator();
+}
+
+//int getKey(const EBookEntry & item) {
+//    return item.getETextNum();
+//}
+
+int Hash(const string & key) {
+    unsigned int k, retVal = 0;
+
+    for (k = 0; k < key.length(); k++)
+        retVal = 37 * retVal + key[k];
+
+    return retVal;
+}
+
+int Hash(const int & key) {
+    return key;
+}
+
+int Hash(const EBookEntry & item) {
+    return Hash(getKey(item));
+}
+
+// ============== RUN OUTPUT WITH INT KEYTYPE =======================
+catalog-short4.txt
+4863
+27860: Dawson, A. J. (, The Message, England -- Fiction
+27548: Watkins, Thomas, The art of promoting, Cucumbers
+29328: James, Alex, The Shining Cow, Science fiction
+27987: Donnell, Annie , Glory and the Other , Girls -- Juvenile fiction
+28145: Liveing, Edward, AttackAn Infantry Su, World War, 1914-1918 -- P
+3633: Collins, Wilkie, Jezebel's Daughter, British -- Germany -- Fic
+26541: Trollope, Antho, The Vicar of Bullham, England -- Fiction
+28775: Punnett, Regina, MendelismThird Editi, Mendel's law
+24890: Tyndale, Willia, , Bible. O.T. Jonah -- Comm
+28943: Penrose, Margar, Dorothy Dale - A Gir, PZ
+27797: Vance, Gerald, Vital Ingredient, Science fiction
+9988: Maniates, Belle, Amarilly of Clothes-, (no data found)
+27690: Malot, Hector, , Nobody's Girl(En Fam, Orphans -- Fiction
+29323: Ames, N. (Natha, An Old Sailor's Yarn, PS
+17373: Hurll, Estelle , The Madonna in Art, Mary, Blessed Virgin, Sai
+27700: Jones, Thomas S, The Rose-Jar, Poetry
+26277: Bacon, Josephin, Margarita's SoulThe , PS
+28349: Baker, Sarah S., The Golden House, Sweden -- Juvenile fictio
+126: Doyle, Arthur C, The Poison Belt, Challenger, Professor (Fi
+27030: Lebert, Marie, From the Print Media, (no data found)
+29723: Salisbury, Step, The Mayas, the Sourc, Mayas -- History
+28596: Various, Punch or the London , English wit and humor --
+30168: Bell, Edward Al, A History of Giggles, Giggleswick School (Giggl
+28747: Holmes, Oliver , The Works Of Oliver , Indexes
+16624: Eddy, Mary Bake, No and Yes, (no data found)
+The same random books from the hash table
+27860: Dawson, A. J. (, The Message, England -- Fiction
+27860: Dawson, A. J. (, The Message, England -- Fiction
+
+27548: Watkins, Thomas, The art of promoting, Cucumbers
+27548: Watkins, Thomas, The art of promoting, Cucumbers
+
+29328: James, Alex, The Shining Cow, Science fiction
+29328: James, Alex, The Shining Cow, Science fiction
+
+27987: Donnell, Annie , Glory and the Other , Girls -- Juvenile fiction
+27987: Donnell, Annie , Glory and the Other , Girls -- Juvenile fiction
+
+28145: Liveing, Edward, AttackAn Infantry Su, World War, 1914-1918 -- P
+28145: Liveing, Edward, AttackAn Infantry Su, World War, 1914-1918 -- P
+
+3633: Collins, Wilkie, Jezebel's Daughter, British -- Germany -- Fic
+3633: Collins, Wilkie, Jezebel's Daughter, British -- Germany -- Fic
+
+26541: Trollope, Antho, The Vicar of Bullham, England -- Fiction
+26541: Trollope, Antho, The Vicar of Bullham, England -- Fiction
+
+28775: Punnett, Regina, MendelismThird Editi, Mendel's law
+28775: Punnett, Regina, MendelismThird Editi, Mendel's law
+
+24890: Tyndale, Willia, , Bible. O.T. Jonah -- Comm
+24890: Tyndale, Willia, , Bible. O.T. Jonah -- Comm
+
+28943: Penrose, Margar, Dorothy Dale - A Gir, PZ
+28943: Penrose, Margar, Dorothy Dale - A Gir, PZ
+
+27797: Vance, Gerald, Vital Ingredient, Science fiction
+27797: Vance, Gerald, Vital Ingredient, Science fiction
+
+9988: Maniates, Belle, Amarilly of Clothes-, (no data found)
+9988: Maniates, Belle, Amarilly of Clothes-, (no data found)
+
+27690: Malot, Hector, , Nobody's Girl(En Fam, Orphans -- Fiction
+27690: Malot, Hector, , Nobody's Girl(En Fam, Orphans -- Fiction
+
+29323: Ames, N. (Natha, An Old Sailor's Yarn, PS
+29323: Ames, N. (Natha, An Old Sailor's Yarn, PS
+
+17373: Hurll, Estelle , The Madonna in Art, Mary, Blessed Virgin, Sai
+17373: Hurll, Estelle , The Madonna in Art, Mary, Blessed Virgin, Sai
+
+27700: Jones, Thomas S, The Rose-Jar, Poetry
+27700: Jones, Thomas S, The Rose-Jar, Poetry
+
+26277: Bacon, Josephin, Margarita's SoulThe , PS
+26277: Bacon, Josephin, Margarita's SoulThe , PS
+
+28349: Baker, Sarah S., The Golden House, Sweden -- Juvenile fictio
+28349: Baker, Sarah S., The Golden House, Sweden -- Juvenile fictio
+
+126: Doyle, Arthur C, The Poison Belt, Challenger, Professor (Fi
+126: Doyle, Arthur C, The Poison Belt, Challenger, Professor (Fi
+
+27030: Lebert, Marie, From the Print Media, (no data found)
+27030: Lebert, Marie, From the Print Media, (no data found)
+
+29723: Salisbury, Step, The Mayas, the Sourc, Mayas -- History
+29723: Salisbury, Step, The Mayas, the Sourc, Mayas -- History
+
+28596: Various, Punch or the London , English wit and humor --
+28596: Various, Punch or the London , English wit and humor --
+
+30168: Bell, Edward Al, A History of Giggles, Giggleswick School (Giggl
+30168: Bell, Edward Al, A History of Giggles, Giggleswick School (Giggl
+
+28747: Holmes, Oliver , The Works Of Oliver , Indexes
+28747: Holmes, Oliver , The Works Of Oliver , Indexes
+
+16624: Eddy, Mary Bake, No and Yes, (no data found)
+16624: Eddy, Mary Bake, No and Yes, (no data found)
+
+Not found.
+Did not find book
+did not find book again
+
+// ============== RUN OUTPUT WITH STRING KEYTYPE ====================
+catalog-short4.txt
+4863
+28450: Gerken, William, Stopover, Short stories
+6635: Rice, Alice Cal, A Romance of Billy-G, PS
+10559: Stevenson, Robe, Ballads, (no data found)
+27759: Cruttwell, Maud, Luca Signorelli, Signorelli, Luca, 1441?-1
+134: Wollstonecraft,, Maria, or the Wrongs, Fiction
+28125: Various, Dear Santa Claus, Children's stories, Ameri
+26095: Aristotle, 384 , The Athenian Constit, Classical literature
+28382: Various, Punch or the London , English wit and humor --
+13575: Various, How to Observe in Ar, Archaeology
+26407: Sleight, C. S., An Arrow in a Sunbea, United States -- Social l
+30057: Dingle, Aylward, The Pirate Woman, Pirates -- Fiction
+19725: Livius, Titus, The History of Rome,, (no data found)
+29954: De Vet, Charles, There is a Reaper .., Science fiction
+11984: James, William,, A Pluralistic Univer, (no data found)
+25939: Wise, Thomas Ja, A Bibliography of th, Borrow, George Henry, 180
+27591: Hocking, Joseph, The Birthright, PR
+3282: Lang, Andrew, 1, The Brown Fairy Book, Fairy tales
+27660: Nathan, George , A Book Without A Tit, PS
+29989: Fyfe, Horace Br, The Outbreak of Peac, Science fiction
+30113: Cullum, Ridgwel, The One-Way TrailA s, Western stories
+28696: Carroll, Lewis,, Symbolic Logic, Logic, Symbolic and mathe
+30029: Janifer, Lauren, Lost in Translation, Science fiction
+272: Luther, Martin,, An Open Letter on Tr, Reformation -- Germany
+29366: Brown, Alice, 1, The Prisoner, PS
+26183: Hewett-Thayer, , Laurence Sterne in G, Sterne, Laurence, 1713-17
+The same random books from the hash table
+28450: Gerken, William, Stopover, Short stories
+28450: Gerken, William, Stopover, Short stories
+
+6635: Rice, Alice Cal, A Romance of Billy-G, PS
+15180: Rice, Alice Cal, The Honorable Perciv, (no data found)
+
+10559: Stevenson, Robe, Ballads, (no data found)
+281: Stevenson, Robe, Father Damien, an Op, Damien, Father, 1840-1889
+
+27759: Cruttwell, Maud, Luca Signorelli, Signorelli, Luca, 1441?-1
+27759: Cruttwell, Maud, Luca Signorelli, Signorelli, Luca, 1441?-1
+
+134: Wollstonecraft,, Maria, or the Wrongs, Fiction
+134: Wollstonecraft,, Maria, or the Wrongs, Fiction
+
+28125: Various, Dear Santa Claus, Children's stories, Ameri
+28712: Various, The American Mission, Congregational churches -
+
+26095: Aristotle, 384 , The Athenian Constit, Classical literature
+26095: Aristotle, 384 , The Athenian Constit, Classical literature
+
+28382: Various, Punch or the London , English wit and humor --
+28712: Various, The American Mission, Congregational churches -
+
+13575: Various, How to Observe in Ar, Archaeology
+28712: Various, The American Mission, Congregational churches -
+
+26407: Sleight, C. S., An Arrow in a Sunbea, United States -- Social l
+26407: Sleight, C. S., An Arrow in a Sunbea, United States -- Social l
+
+30057: Dingle, Aylward, The Pirate Woman, Pirates -- Fiction
+30057: Dingle, Aylward, The Pirate Woman, Pirates -- Fiction
+
+19725: Livius, Titus, The History of Rome,, (no data found)
+19725: Livius, Titus, The History of Rome,, (no data found)
+
+29954: De Vet, Charles, There is a Reaper .., Science fiction
+29954: De Vet, Charles, There is a Reaper .., Science fiction
+
+11984: James, William,, A Pluralistic Univer, (no data found)
+11984: James, William,, A Pluralistic Univer, (no data found)
+
+25939: Wise, Thomas Ja, A Bibliography of th, Borrow, George Henry, 180
+25939: Wise, Thomas Ja, A Bibliography of th, Borrow, George Henry, 180
+
+27591: Hocking, Joseph, The Birthright, PR
+27591: Hocking, Joseph, The Birthright, PR
+
+3282: Lang, Andrew, 1, The Brown Fairy Book, Fairy tales
+3319: Lang, Andrew, 1, Letters to Dead Auth, Literature
+
+27660: Nathan, George , A Book Without A Tit, PS
+27660: Nathan, George , A Book Without A Tit, PS
+
+29989: Fyfe, Horace Br, The Outbreak of Peac, Science fiction
+29994: Fyfe, Horace Br, Irresistible Weapon, Science fiction
+
+30113: Cullum, Ridgwel, The One-Way TrailA s, Western stories
+29628: Cullum, Ridgwel, The Golden WomanA St, Western stories
+
+28696: Carroll, Lewis,, Symbolic Logic, Logic, Symbolic and mathe
+28885: Carroll, Lewis,, Alice's Adventures i, Fantasy
+
+30029: Janifer, Lauren, Lost in Translation, Science fiction
+28518: Janifer, Lauren, Mex, Short stories
+
+272: Luther, Martin,, An Open Letter on Tr, Reformation -- Germany
+28464: Luther, Martin,, Epistle Sermons, Vol, Sermons
+
+29366: Brown, Alice, 1, The Prisoner, PS
+29366: Brown, Alice, 1, The Prisoner, PS
+
+26183: Hewett-Thayer, , Laurence Sterne in G, Sterne, Laurence, 1713-17
+26183: Hewett-Thayer, , Laurence Sterne in G, Sterne, Laurence, 1713-17
+
+Not found.
+Did not find book
+did not find book again

@@ -1,0 +1,288 @@
+// ============= FILE 1: Assignment7.cpp ============================
+#include <iostream>
+#include "FHvector.h"
+#include <cmath>
+#include <time.h>
+using namespace std;
+
+template <typename Comparable>
+void shellSortX(FHvector<Comparable> & a, Comparable gapArray[], 
+    int gapArraySize) {
+    int k, pos, arraySize, gap, gapIndex;
+    Comparable tmp;
+
+    arraySize = a.size();
+    for (gapIndex = gapArraySize - 1, gap = gapArray[gapIndex]; gapIndex >= 0; 
+        gap = gapArray[--gapIndex]) {
+        // outer gap loop
+        for (pos = gap; pos < arraySize; pos++)
+        {
+            tmp = a[pos];
+            for (k = pos; k >= gap && tmp < a[k - gap]; k -= gap) {
+                // inner loop
+                a[k] = a[k - gap];
+            }
+            a[k] = tmp;
+        }
+    }
+};
+
+int sedgewickGapSequence(int i) {
+    if (i % 2 == 0) {
+        return 9 * pow(4, i / 2) - 9 * pow(2, i / 2) + 1;
+    } else {
+        return pow(4, 2 + (i / 2)) - 3 * pow(2, 2 + (i / 2)) + 1;
+    }
+};
+
+int generateBestGapSequence(int i) {
+    // based on Tokuda's sequence obtained from:
+    // https://en.wikipedia.org/wiki/Shellsort#Gap_sequences
+    return ceil(0.2 * (9 * pow((2.25), i) - 4));
+};
+
+int main() {
+    const int ARRAY_SIZE = 250000;
+    FHvector<int> fhVectorOfInts1;
+    FHvector<int> fhVectorOfInts2;
+    FHvector<int> fhVectorOfInts3;
+    FHvector<int> fhVectorOfInts4;
+    clock_t startTime, stopTime;
+    srand(time(NULL));
+    int randomNum;
+
+    // populate vectors
+    for (int i = 0; i < ARRAY_SIZE; i++) {
+        randomNum = rand() % ARRAY_SIZE;
+        fhVectorOfInts1.push_back(randomNum);
+        fhVectorOfInts2.push_back(randomNum);
+        fhVectorOfInts3.push_back(randomNum);
+        fhVectorOfInts4.push_back(randomNum);
+    }
+
+    FHvector<int> shellImpliedVec;
+    int shellImpliedArraySize = log(ARRAY_SIZE) / log(2);
+    int * shellImpliedGapSequence = new int[shellImpliedArraySize];
+    int gapArray[] = { 1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024,
+        2048, 4096, 8192, 16384, 32768, 65536, 131072, 262144, 524288,
+        1048576 };
+    int gapArraySize = 21;
+
+    // build implied shellsort gap sequence
+    for (int i = ARRAY_SIZE / 2; i > 0; i /= 2) {
+        shellImpliedVec.push_back(i);
+    }
+    
+    for (int i = 0; i < shellImpliedArraySize; i++) {
+        shellImpliedGapSequence[i] = shellImpliedVec[shellImpliedArraySize - 1 - i];
+    }
+
+    // build sedgewick's gap sequence
+    int sedgewickArray[28]; // to be computed using formulas
+    int sedgewickArraySize = 28;
+    cout << "Printing Sedgewick's gap sequence: " << endl;
+    for (int i = 0; i < 28; i++) {
+        sedgewickArray[i] = sedgewickGapSequence(i);
+        cout << sedgewickArray[i] << endl;
+    }
+
+    // build the best one i can find
+    int bestGap[26];
+    cout << "Printing out best gap sequence found: " << endl;
+    for (int i = 0; i < 26; i++) {
+        bestGap[i] = generateBestGapSequence(i);
+        cout << bestGap[i] << endl;
+    }
+
+    startTime = clock();
+    shellSortX(fhVectorOfInts1, gapArray, gapArraySize);
+    stopTime = clock();
+    cout << "\nShellSort with explicit gap sequence elapsed time: "
+        << (double)(stopTime - startTime) / (double)CLOCKS_PER_SEC
+        << " seconds." << endl << endl;
+
+    startTime = clock();
+    shellSortX(fhVectorOfInts2, shellImpliedGapSequence, shellImpliedArraySize);
+    stopTime = clock();
+    cout << "\nShellSort with shell sort implicit gap sequence elapsed time: "
+        << (double)(stopTime - startTime) / (double)CLOCKS_PER_SEC
+        << " seconds." << endl << endl;
+
+    startTime = clock();
+    shellSortX(fhVectorOfInts3, sedgewickArray, sedgewickArraySize);
+    stopTime = clock();
+    cout << "\nShellSort with sedgewick's gap sequence elapsed time: "
+        << (double)(stopTime - startTime) / (double)CLOCKS_PER_SEC
+        << " seconds." << endl << endl;
+
+    startTime = clock();
+    shellSortX(fhVectorOfInts4, bestGap, 26);
+    stopTime = clock();
+    cout << "\nShellSort with best gap sequence found elapsed time: "
+        << (double)(stopTime - startTime) / (double)CLOCKS_PER_SEC
+        << " seconds." << endl << endl;
+    
+    // check vectors are sorted
+    cout << "Validating all vectors are sorted correctly: " << endl;
+    for (int i = 0; i < 10; i++) {
+        cout << "Explicit gap seq. " << i << "th element: " 
+            << fhVectorOfInts1.at(i) << endl;
+        cout << "Implicit gap seq. " << i << "th element: " 
+            << fhVectorOfInts2.at(i) << endl;
+        cout << "Sedgewick's gap seq. " << i << "th element: " 
+            << fhVectorOfInts3.at(i) << endl;
+        cout << "Best gap seq. " << i << "th element: " 
+            << fhVectorOfInts4.at(i) << endl << endl;
+    }
+
+    // cleanup
+    delete[] shellImpliedGapSequence;
+    shellImpliedGapSequence = NULL;
+}
+
+/*
+==============================================================================
+|    GAP   |   SIZE   |   SIZE   |   SIZE   |   SIZE   |   SIZE   |   SIZE   |
+| SEQUENCE |   10K    |   50K    |   100K   |   150K   |   200K   |   250K   |
+==============================================================================
+| implicit |  0.025s  |  0.16s   |  0.36s   |  0.576s  |  0.824s  |  1.06s   |
+| gap seq. |          |          |          |          |          |          |
+==============================================================================
+| explicit |  0.046s  |  0.459s  |  1.49s   |  2.227s  |  5.183s  |  5.504s  |
+| gap seq. |          |          |          |          |          |          |
+==============================================================================
+| sedgewick|  0.017s  |  0.107s  |  0.237s  |  0.336s  |  0.453s  |  0.613s  |
+| gap seq. |          |          |          |          |          |          |
+==============================================================================
+| research |  0.016s  |  0.103s  |  0.22s   |  0.329s  |  0.458s  |  0.594s  |
+| gap seq. |          |          |          |          |          |          |
+==============================================================================
+
+Shell's implied sequence is quicker than the explicit sequence because the
+implicit sequence changes based on the size of the array whereas the explicit
+sequence is static and stays the same for all types of array. Notably, the 
+explicit gap sequence increases by powers of 2 which can result in odd indexes
+not to be mixed in the array until the very last step of the sort sequence
+which causes the sort time to increase. As a result, the implicit sequence
+is faster as we can see from the table. 
+*/
+
+// ============= RUN OUTPUT WITH ARRAY_SIZE = 250K ==================
+Printing Sedgewick's gap sequence:
+1
+5
+19
+41
+109
+209
+505
+929
+2161
+3905
+8929
+16001
+36289
+64769
+146305
+260609
+587521
+1045505
+2354689
+4188161
+9427969
+16764929
+37730305
+67084289
+150958081
+268386305
+603906049
+1073643521
+Printing out best gap sequence found:
+1
+4
+9
+20
+46
+103
+233
+525
+1182
+2660
+5985
+13467
+30301
+68178
+153401
+345152
+776591
+1747331
+3931496
+8845866
+19903198
+44782196
+100759940
+226709866
+510097200
+1147718700
+
+ShellSort with explicit gap sequence elapsed time: 5.504 seconds.
+
+
+ShellSort with shell sort implicit gap sequence elapsed time: 1.06 seconds.
+
+
+ShellSort with sedgewick's gap sequence elapsed time: 0.613 seconds.
+
+
+ShellSort with best gap sequence found elapsed time: 0.594 seconds.
+
+Validating all vectors are sorted correctly:
+Explicit gap seq. 0th element: 0
+Implicit gap seq. 0th element: 0
+Sedgewick's gap seq. 0th element: 0
+Best gap seq. 0th element: 0
+
+Explicit gap seq. 1th element: 0
+Implicit gap seq. 1th element: 0
+Sedgewick's gap seq. 1th element: 0
+Best gap seq. 1th element: 0
+
+Explicit gap seq. 2th element: 0
+Implicit gap seq. 2th element: 0
+Sedgewick's gap seq. 2th element: 0
+Best gap seq. 2th element: 0
+
+Explicit gap seq. 3th element: 0
+Implicit gap seq. 3th element: 0
+Sedgewick's gap seq. 3th element: 0
+Best gap seq. 3th element: 0
+
+Explicit gap seq. 4th element: 0
+Implicit gap seq. 4th element: 0
+Sedgewick's gap seq. 4th element: 0
+Best gap seq. 4th element: 0
+
+Explicit gap seq. 5th element: 0
+Implicit gap seq. 5th element: 0
+Sedgewick's gap seq. 5th element: 0
+Best gap seq. 5th element: 0
+
+Explicit gap seq. 6th element: 0
+Implicit gap seq. 6th element: 0
+Sedgewick's gap seq. 6th element: 0
+Best gap seq. 6th element: 0
+
+Explicit gap seq. 7th element: 1
+Implicit gap seq. 7th element: 1
+Sedgewick's gap seq. 7th element: 1
+Best gap seq. 7th element: 1
+
+Explicit gap seq. 8th element: 2
+Implicit gap seq. 8th element: 2
+Sedgewick's gap seq. 8th element: 2
+Best gap seq. 8th element: 2
+
+Explicit gap seq. 9th element: 2
+Implicit gap seq. 9th element: 2
+Sedgewick's gap seq. 9th element: 2
+Best gap seq. 9th element: 2

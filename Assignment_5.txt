@@ -1,0 +1,362 @@
+// ============= FILE 1: FHsplayTree.h ==================
+#ifndef FHSPLAYTREE_H
+#define FHSPLAYTREE_H
+#include "FHsearch_tree.h"
+using namespace std;
+
+template <class Comparable>
+class FHsplayTree : public FHsearch_tree<Comparable> {
+    public:
+        bool insert(const Comparable &x);
+        bool remove(const Comparable &x);
+        bool contains(const Comparable &x);
+        const Comparable & find(const Comparable & x);
+        const Comparable & showRoot();
+        Comparable & getRootData() const;
+
+    protected:
+        void splay(FHs_treeNode<Comparable> * &root, const Comparable & x);
+        void rotateWithLeftChild(FHs_treeNode<Comparable> *& k2);
+        void rotateWithRightChild(FHs_treeNode<Comparable> *& k2);
+        
+    private:
+        static Comparable SENTINEL;
+};
+
+template <class Comparable>
+Comparable FHsplayTree<Comparable>::SENTINEL = Comparable();
+
+template <class Comparable>
+bool FHsplayTree<Comparable>::insert(const Comparable &x) {
+    FHs_treeNode<Comparable> * leftChild = NULL;
+    FHs_treeNode<Comparable> * rightChild = NULL;
+    if (this->mRoot == NULL) {
+        this->mRoot = new FHs_treeNode<Comparable>(x);
+        this->mSize++;
+        return true;
+    }
+    splay(this->mRoot, x);
+
+    // adjust the pointers
+    if (this->mRoot->data < x) {
+        leftChild = this->mRoot;
+        rightChild = this->mRoot->rtChild;
+    } else if (x < this->mRoot->data) {
+        leftChild = this->mRoot->lftChild;
+        rightChild = this->mRoot;
+    } else {
+        return false; // node already exists
+    }
+    FHs_treeNode<Comparable> * newNode = new FHs_treeNode<Comparable>(x, 
+        leftChild, rightChild);
+    this->mRoot = newNode;
+    this->mSize++;
+    return true;
+}
+
+template <class Comparable>
+bool FHsplayTree<Comparable>::remove(const Comparable & x) {
+    FHs_treeNode<Comparable> * newRoot = NULL;
+    if (this->mRoot == NULL) {
+        return false; // empty tree
+    }
+    splay(this->mRoot, x);
+    if (x != this->mRoot->data) {
+        return false; // x is not in the tree
+    }
+    if (this->mRoot->lftChild  == NULL) {
+        newRoot = this->mRoot->rtChild;
+    }
+    else {
+        newRoot = this->mRoot->lftChild;
+        splay(newRoot, x);
+        newRoot->rtChild = this->mRoot->rtChild;
+    }
+    delete this->mRoot;
+    this->mRoot = newRoot;
+    return true;
+}
+
+template <class Comparable>
+bool FHsplayTree<Comparable>::contains(const Comparable & x) {
+    try {
+        find(x);
+    } catch (...) {
+        return false;
+    }
+    return true;
+}
+
+template <class Comparable>
+const Comparable & FHsplayTree<Comparable>::find(const Comparable & x) {
+    splay(this->mRoot, x);
+    if (this->mRoot->data == x) {
+        return this->mRoot->data;
+    }
+    throw typename FHsearch_tree<Comparable>::NotFoundException();
+}
+
+template <class Comparable>
+const Comparable & FHsplayTree<Comparable>::showRoot() {
+    static Comparable & rootVal = this->mRoot == NULL ? 
+        SENTINEL : this->mRoot->data;
+    return this->mRoot == NULL ? SENTINEL : this->mRoot->data;
+}
+
+template <class Comparable>
+Comparable & FHsplayTree<Comparable>::getRootData() const {
+    return this->mRoot == NULL ? SENTINEL : this->mRoot->data;
+}
+
+template <class Comparable>
+void FHsplayTree<Comparable>::splay(FHs_treeNode<Comparable> *& root, 
+        const Comparable& x) {
+    FHs_treeNode<Comparable> * rightTree = NULL;
+    FHs_treeNode<Comparable> * leftTree = NULL;
+    FHs_treeNode<Comparable> * rightTreeMin = NULL;
+    FHs_treeNode<Comparable> * leftTreeMax = NULL;
+    FHs_treeNode<Comparable> * nodeToAdd = NULL;
+    if (root == NULL) {
+        throw typename FHsearch_tree<Comparable>::EmptyTreeException();
+    }
+    while(root != NULL) {
+        if (x < root->data) {
+            if (root->lftChild == NULL) {
+                break;
+            }
+            if (x < root->lftChild->data) {
+                rotateWithLeftChild(root);
+                if (root->lftChild == NULL) {
+                    break; // x is not in the tree
+                }
+            }
+            // cut off the root and right child only
+            nodeToAdd = this->clone(root);
+            nodeToAdd->lftChild = NULL;
+            rightTree == NULL ? rightTree = nodeToAdd : 
+                rightTreeMin->lftChild = nodeToAdd;
+            rightTreeMin = nodeToAdd;
+            root = root->lftChild;
+        }
+        else if (x > root->data) {
+            if (root->rtChild == NULL) {
+                break; // x is not in the tree
+            }
+            if (x > root->rtChild->data) {
+                rotateWithRightChild(root);
+                if (root->rtChild == NULL) {
+                    break; // x not in tree
+                }
+            }
+            // prune tree
+            nodeToAdd = this->clone(root);
+            nodeToAdd->rtChild = NULL;
+            leftTree == NULL ? leftTree = nodeToAdd : 
+                leftTreeMax->rtChild = nodeToAdd;
+            leftTreeMax = nodeToAdd;
+            root = root->rtChild;
+        }
+        else {
+            // we found x at the root
+            break;
+        }
+    }
+    // reassemnle tree
+    if (root->lftChild != NULL) {
+        nodeToAdd = this->clone(root->lftChild);
+        leftTree == NULL ? leftTree = nodeToAdd : 
+            leftTreeMax->rtChild = nodeToAdd;
+    }
+
+    if (root->rtChild != NULL) {
+        nodeToAdd = this->clone(root->rtChild);
+        rightTree == NULL ? rightTree = nodeToAdd : 
+            rightTreeMin->lftChild = nodeToAdd;
+    }
+    root->lftChild = leftTree;
+    root->rtChild = rightTree;
+}
+
+template <class Comparable>
+void FHsplayTree<Comparable>::rotateWithLeftChild(FHs_treeNode<Comparable> *& k2) {
+    if (k2 == NULL) {
+        throw typename FHsearch_tree<Comparable>::EmptyTreeException();
+    }
+    FHs_treeNode<Comparable> *k1 = k2->lftChild;
+    k2->lftChild = k1->rtChild;
+    k1->rtChild = k2;
+    k2 = k1;
+}
+
+template <class Comparable>
+void FHsplayTree<Comparable>::rotateWithRightChild(FHs_treeNode<Comparable> *& k2) {
+    if (k2 == NULL) {
+        throw typename FHsearch_tree<Comparable>::EmptyTreeException();
+    }
+    FHs_treeNode<Comparable> *k1 = k2->rtChild;
+    k2->rtChild = k1->lftChild;
+    k1->lftChild = k2;
+    k2 = k1;
+}
+
+#endif
+
+// ======================= FILE 2: Lab5.cpp ===================================
+#include <iostream>
+#include "FHsplayTree.h"
+using namespace std;
+
+template <class T>
+class Printer {
+    ostream& os;
+public:
+    Printer(ostream& theOS) : os(theOS) {}
+    void operator()(const T& obj) { os << obj << " "; }
+};
+
+int main() {
+    FHsplayTree<int> searchTree;
+    //FHsearch_tree<int> searchTree;
+    Printer<int> intPrinter(cout);
+    searchTree.traverse(intPrinter);
+    //cout << searchTree.getRootData() << endl;
+    cout << "Initial size: " << searchTree.size() << endl;
+    for (int k = 1; k <= 32; k++)
+        searchTree.insert(k);
+    cout << "New size: " << searchTree.size() << endl;
+    cout << "\nTraversal: \n";
+    searchTree.traverse(intPrinter);
+    cout << endl << endl;
+    for (int k = -1; k < 13; k++) {
+        // test contains()
+        int k2 = 10 - k;
+        if (!searchTree.contains(k2))
+            cout << " oops on contains " << k2 << endl;
+        //cout << "\nTraversing" << endl;
+        //searchTree.traverse(intPrinter);
+        cout << "contains " << k2 << " --> root: " << searchTree.getRootData()
+            << " height: " << searchTree.showHeight()
+            << endl;
+        // test find()
+        try {
+            searchTree.find(k);
+        }
+        catch (...) {
+            cout << " oops on find " << k << endl;
+        }
+        cout << "find " << k << " --> root: " << searchTree.getRootData()
+            << " height: " << searchTree.showHeight() << endl;
+    }
+
+    // test remove()
+    while (searchTree.showHeight() > 0) {
+        cout << "removing root: " << searchTree.getRootData() << endl;
+        searchTree.remove(searchTree.getRootData());
+        cout << "root is now: " << searchTree.getRootData() <<
+            " with height: " << searchTree.showHeight() << endl;
+    }
+    return 0;
+}
+
+// ====================== RUN OUTPUT ================================
+Initial size: 0
+New size: 32
+
+Traversal:
+1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32
+
+contains 11 --> root: 11 height: 11
+ oops on find -1
+find -1 --> root: 1 height: 13
+contains 10 --> root: 10 height: 12
+ oops on find 0
+find 0 --> root: 1 height: 13
+contains 9 --> root: 9 height: 13
+find 1 --> root: 1 height: 14
+contains 8 --> root: 8 height: 14
+find 2 --> root: 2 height: 15
+contains 7 --> root: 7 height: 15
+find 3 --> root: 3 height: 16
+contains 6 --> root: 6 height: 16
+find 4 --> root: 4 height: 17
+contains 5 --> root: 5 height: 17
+find 5 --> root: 5 height: 17
+contains 4 --> root: 4 height: 18
+find 6 --> root: 6 height: 16
+contains 3 --> root: 3 height: 18
+find 7 --> root: 7 height: 15
+contains 2 --> root: 2 height: 17
+find 8 --> root: 8 height: 14
+contains 1 --> root: 1 height: 16
+find 9 --> root: 9 height: 13
+ oops on contains 0
+contains 0 --> root: 1 height: 15
+find 10 --> root: 10 height: 12
+ oops on contains -1
+contains -1 --> root: 1 height: 14
+find 11 --> root: 11 height: 11
+ oops on contains -2
+contains -2 --> root: 1 height: 13
+find 12 --> root: 12 height: 7
+removing root: 12
+root is now: 11 with height: 7
+removing root: 11
+root is now: 10 with height: 7
+removing root: 10
+root is now: 9 with height: 7
+removing root: 9
+root is now: 8 with height: 7
+removing root: 8
+root is now: 7 with height: 7
+removing root: 7
+root is now: 6 with height: 7
+removing root: 6
+root is now: 5 with height: 7
+removing root: 5
+root is now: 4 with height: 7
+removing root: 4
+root is now: 3 with height: 7
+removing root: 3
+root is now: 2 with height: 7
+removing root: 2
+root is now: 1 with height: 7
+removing root: 1
+root is now: 29 with height: 6
+removing root: 29
+root is now: 28 with height: 7
+removing root: 28
+root is now: 27 with height: 6
+removing root: 27
+root is now: 26 with height: 6
+removing root: 26
+root is now: 25 with height: 5
+removing root: 25
+root is now: 24 with height: 6
+removing root: 24
+root is now: 23 with height: 5
+removing root: 23
+root is now: 22 with height: 5
+removing root: 22
+root is now: 21 with height: 4
+removing root: 21
+root is now: 20 with height: 5
+removing root: 20
+root is now: 19 with height: 4
+removing root: 19
+root is now: 18 with height: 4
+removing root: 18
+root is now: 17 with height: 3
+removing root: 17
+root is now: 16 with height: 3
+removing root: 16
+root is now: 15 with height: 2
+removing root: 15
+root is now: 14 with height: 2
+removing root: 14
+root is now: 13 with height: 2
+removing root: 13
+root is now: 31 with height: 1
+removing root: 31
+root is now: 30 with height: 1
+removing root: 30
+root is now: 32 with height: 0
