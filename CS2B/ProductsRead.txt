@@ -1,0 +1,20 @@
+Android;10;150;N
+iPhone;20;50;N
+Google Pixel;40;75;R
+Bose Headphones;3;200;D
+MacBook;50;900;R
+Lenovo;5;2000;U
+USB;30;10;U
+iPhone;4;60;D
+Camera;20;400;N
+Wii;30;100;U
+DVD Player;74;432;N
+Printer;32;834;R
+XBOX 360;43;974;D
+Mouse;23;97;U
+Blu-Ray Player;54;932;D
+Mouse;34;98;N
+Desktop Computer;1;4000;N
+Battery;3;56;D
+Nintendo Gamecube;78;3432;R
+PS4;34;564;U
