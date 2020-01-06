@@ -1,4 +1,6 @@
-// Lab 1: The Subset-Sum Problem
+// Assignment 1: The Subset-Sum Problem
+// Aaryan Singh 
+// Student ID 20402279
 //------------- PART A -----------------
 #include <iostream>
 #include <vector>
